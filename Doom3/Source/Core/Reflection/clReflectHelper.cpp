@@ -75,18 +75,18 @@ namespace dooms
 			std::string clReflectArgs{};
 
 			const std::filesystem::path clScanPath = path::_GetCurrentPath(ConfigData::GetSingleton()->GetConfigData().GetValue<std::string>("SYSTEM", "CL_SCAN_RELATIVE_PATH"));
-			clReflectArgs.append(clScanPath.generic_string());
+			clReflectArgs.append("\"" + clScanPath.generic_string() + "\"");
 			clReflectArgs.append(" ");
 
 			const std::filesystem::path clMergePath = path::_GetCurrentPath(ConfigData::GetSingleton()->GetConfigData().GetValue<std::string>("SYSTEM", "CL_MERGE_RELATIVE_PATH"));
-			clReflectArgs.append(clMergePath.generic_string());
+			clReflectArgs.append("\"" + clMergePath.generic_string() + "\"");
 			clReflectArgs.append(" ");
 
 			const std::filesystem::path clExportPath = path::_GetCurrentPath(ConfigData::GetSingleton()->GetConfigData().GetValue<std::string>("SYSTEM", "CL_EXPORT_RELATIVE_PATH"));
-			clReflectArgs.append(clExportPath.generic_string());
+			clReflectArgs.append("\"" + clExportPath.generic_string() + "\"");
 			clReflectArgs.append(" ");
 
-			clReflectArgs.append(ProjectFilePath.generic_string());
+			clReflectArgs.append("\"" + ProjectFilePath.generic_string() + "\"");
 			clReflectArgs.append(" ");
 
 #if defined(DEBUG_MODE)
@@ -124,7 +124,7 @@ namespace dooms
 			std::wstring filePath_wstring;
 			filePath_wstring.assign(filePath.begin(), filePath.end());
 
-			const std::wstring argumentForExe = filePath_wstring + L' ' + arguments;
+			const std::wstring argumentForExe = L"\"" + filePath_wstring + L"\" " + arguments;
 			// Start the child process. 
 			if (!CreateProcess(
 				filePath_wstring.c_str(),   // No module name (use command line)
