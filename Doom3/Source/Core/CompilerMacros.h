@@ -1,6 +1,5 @@
 #pragma once
 
-
 #ifdef _DEBUG
 #define DEBUG_MODE 1
 #else

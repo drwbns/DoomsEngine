@@ -39,7 +39,7 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{35fc0630-ea2a-49fd-9ad7-23c2521ff18d}</ProjectGuid>
     <RootNamespace>Doom3</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -64,10 +64,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <EnableUnitySupport>false</EnableUnitySupport>
     <EnableASAN>false</EnableASAN>
+    <UseInteloneTBB>true</UseInteloneTBB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Test|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -80,7 +81,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
     <EnableUnitySupport>false</EnableUnitySupport>
@@ -285,11 +286,10 @@ xcopy /y /d /E /H /C /I "$(ProjectDir)Assets" "$(TargetDir)Assets"</Command>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);UNICODE;__x86_64__;VCXPROJ_PATH="$(ProjectPath.Replace('\', '\\'))"</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);UNICODE;__x86_64__;VCXPROJ_PATH="$(ProjectPath.Replace('\', '\\'))"</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ThirdParty\nlohmann;$(SolutionDir)ThirdParty\assimp\include;$(SolutionDir)ThirdParty\oneTBB\include;$(ProjectDir)..\OpenGLGraphicsAPI;$(ProjectDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(ProjectDir)..\DX11GraphicsAPI;$(ProjectDir);$(SolutionDir)ThirdParty\glfw3\include;$(SolutionDir)ThirdParty\KHR;$(SolutionDir)ThirdParty\imgui;$(SolutionDir)ThirdParty\DirectXTex\DirectXTex;$(SolutionDir)ThirdParty\concurrentqueue;$(SolutionDir)Source\Core\OS;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\JINMATH;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\UUID;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_ForDoomsEngine\inc;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Plugins;$(SolutionDir)Source\Core\Container\JINSTL\JINSTL\include\jinstl</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ThirdParty\nlohmann;$(SolutionDir)ThirdParty\assimp\include;$(SolutionDir)ThirdParty\oneTBB\include;$(ProjectDir)..\OpenGLGraphicsAPI;$(ProjectDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(ProjectDir)..\DX11GraphicsAPI;$(ProjectDir);$(SolutionDir)ThirdParty\glfw3\include;$(SolutionDir)ThirdParty\KHR;$(SolutionDir)ThirdParty\imgui;$(SolutionDir)ThirdParty\DirectXTex\DirectXTex;$(SolutionDir)ThirdParty\concurrentqueue;$(SolutionDir)Source\Core\OS;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\JINMATH;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\UUID;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_ForDoomsEngine\inc;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Plugins;$(SolutionDir)Source\Core\Container\JINSTL\JINSTL\include\jinstl;C:\WindowsKits\10\Include\10.0.22621.0\ucrt;C:\VS2019\MSVC\14.29.30133\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -302,11 +302,12 @@ xcopy /y /d /E /H /C /I "$(ProjectDir)Assets" "$(TargetDir)Assets"</Command>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)ThirdParty\DirectXTex\bin\CMake\Debug;$(SolutionDir)ThirdParty\oneTBB\msvc_19.30_cxx_64_md_debug;$(SolutionDir)ThirdParty\assimp\lib\Debug;$(OutputPath)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)ThirdParty\DirectXTex\bin\CMake\Debug;$(SolutionDir)ThirdParty\oneTBB\msvc_19.30_cxx_64_md_debug;$(SolutionDir)ThirdParty\assimp\lib\Debug;$(OutputPath);C:\Program Files %28x86%29\Microsoft Visual Studio\2019\Professional\VC\Tools\MSVC\14.29.30133\lib\x64</AdditionalLibraryDirectories>
       <AdditionalDependencies>%(AdditionalDependencies);ntdll.lib;DirectXTex.lib;assimp-vc143-mtd.lib;tbbmalloc_debug.lib;tbbmalloc_proxy_debug.lib;shcore.lib</AdditionalDependencies>
       <GenerateMapFile>true</GenerateMapFile>
       <MapFileName>map.map</MapFileName>
@@ -379,7 +380,7 @@ xcopy /y /d /f "$(ProjectDir)*.map" "$(TargetDir)"</Command>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);UNICODE;__x86_64__;VCXPROJ_PATH="$(ProjectPath.Replace('\', '\\'))"</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)ThirdParty\nlohmann;$(SolutionDir)ThirdParty\assimp\include;$(SolutionDir)ThirdParty\oneTBB\include;$(ProjectDir)..\OpenGLGraphicsAPI;$(ProjectDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(ProjectDir)..\DX11GraphicsAPI;$(ProjectDir);$(SolutionDir)ThirdParty\glfw3\include;$(SolutionDir)ThirdParty\KHR;$(SolutionDir)ThirdParty\imgui;$(SolutionDir)ThirdParty\DirectXTex\DirectXTex;$(SolutionDir)ThirdParty\concurrentqueue;$(SolutionDir)Source\thirdparty\amdUprof\include;$(SolutionDir)Source\Core\OS;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\JINMATH;$(SolutionDir)Source\Core\UUID;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_ForDoomsEngine\inc;$(SolutionDir)Source\Plugins;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Core\Container\JINSTL\JINSTL\include\jinstl</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)ThirdParty\nlohmann;$(SolutionDir)ThirdParty\assimp\include;$(SolutionDir)ThirdParty\oneTBB\include;$(ProjectDir)..\OpenGLGraphicsAPI;$(ProjectDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(ProjectDir)..\DX11GraphicsAPI;$(ProjectDir);$(SolutionDir)ThirdParty\glfw3\include;$(SolutionDir)ThirdParty\KHR;$(SolutionDir)ThirdParty\imgui;$(SolutionDir)ThirdParty\DirectXTex\DirectXTex;$(SolutionDir)ThirdParty\concurrentqueue;$(SolutionDir)Source\thirdparty\amdUprof\include;$(SolutionDir)Source\Core\OS;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\JINMATH;$(SolutionDir)Source\Core\UUID;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_ForDoomsEngine\inc;$(SolutionDir)Source\Plugins;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Core\Container\JINSTL\JINSTL\include\jinstl;C:\VS2019\MSVC\14.29.30133\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
