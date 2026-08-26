@@ -45,19 +45,19 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Test|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -73,7 +73,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Test|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <EnableUnitySupport>false</EnableUnitySupport>
     <EnableASAN>false</EnableASAN>
@@ -88,10 +88,10 @@
     <EnableASAN>false</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='AMDuProf|Win32'">
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='AMDuProf|x64'">
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -323,7 +323,7 @@ xcopy /y /d /f "$(ProjectDir)*.map" "$(TargetDir)"
 xcopy /y /s "$(ProjectDir)ThirdParty\assimp\bin\Debug" "$(TargetDir)"
 xcopy /y /s "$(ProjectDir)ThirdParty\oneTBB\msvc_19.30_cxx_64_md_debug" "$(TargetDir)"
 xcopy /y /s "$(ProjectDir)ThirdParty\glslcc\src\Debug" "$(TargetDir)"
-</Command>
+xcopy /y /s "$(ProjectDir)Source\Core\Reflection\clReflect_automation\clReflect_automation\Output" "$(TargetDir)"</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if not exist "$(OutputPath)SourceDependencies" mkdir "$(OutputPath)SourceDependencies"</Command>
@@ -417,7 +417,7 @@ xcopy /y /d /f "$(ProjectDir)*.map" "$(TargetDir)"
 xcopy /y /s "$(ProjectDir)ThirdParty\assimp\bin\Release" "$(TargetDir)"
 xcopy /y /s "$(ProjectDir)ThirdParty\oneTBB\msvc_19.30_cxx_64_md_release" "$(TargetDir)"
 xcopy /y /s "$(ProjectDir)ThirdParty\glslcc\src\Release" "$(TargetDir)"
-</Command>
+xcopy /y /s "$(ProjectDir)Source\Core\Reflection\clReflect_automation\clReflect_automation\Output" "$(TargetDir)"</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>if not exist "$(OutputPath)SourceDependencies" mkdir "$(OutputPath)SourceDependencies"</Command>
