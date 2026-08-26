@@ -182,9 +182,13 @@ void dooms::ui::LogGUI::Render()
 			{
 				ImGui::SetScrollHereY(1.0f);
 			}
-
-			ImGui::EndChild();
 		}
+
+		// EndChild() must be called even when BeginChild() returns false (the child
+		// is clipped or collapsed, which happens as the window closes). Skipping it
+		// leaves the child on the window stack, and the End() below then trips
+		// "Must call EndChild() and not End()!" and abort()s.
+		ImGui::EndChild();
 	}
 
 	ImGui::End();
