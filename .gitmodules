@@ -1,12 +1,12 @@
 [submodule "Doom3/Source/Core/Reflection/clReflect_automation"]
 	path = Doom3/Source/Core/Reflection/clReflect_automation
-	url = https://github.com/SungJJinKang/clReflect_automation
+	url = https://github.com/drwbns/clReflect_automation.git
 [submodule "Doom3/Source/Engine/Rendering/Culling/EveryCulling"]
 	path = Doom3/Source/Engine/Rendering/Culling/EveryCulling
 	url = https://github.com/drwbns/EveryCulling.git
 [submodule "Doom3/Source/Core/Math/JINMATH"]
 	path = Doom3/Source/Core/Math/JINMATH
-	url = https://github.com/SungJJinKang/JINMATH.git
+	url = https://github.com/drwbns/JINMATH.git
 [submodule "Doom3/Source/Core/Reflection/clReflect_ForDoomsEngine"]
 	path = Doom3/Source/Core/Reflection/clReflect_ForDoomsEngine
-	url = https://github.com/SungJJinKang/clReflect_ForDoomsEngine.git
+	url = https://github.com/drwbns/clReflect_ForDoomsEngine.git
