@@ -45,10 +45,19 @@ namespace dooms
 			//std::filesystem::path additionalDirectoryForClang = ""
 			//clReflectAdditionalCompilerOptionsString.append(dooms::path::_GetCurrentPath(sourceDependencyFolderDirectory.generic_u8string()));
 
-			clReflectAdditionalCompilerOptionsString.append(" -SD");
+			// Quote the value so a path containing spaces stays a single argument
+			// through the runtime's splitting, the same reason the paths above are
+			// quoted. The runtime strips these quotes again, so this takes one pair
+			// rather than the tripled pair VCXPROJ_PATH needs to survive as a
+			// string literal for the compiler.
+			//
+			// No trailing separator here: a backslash directly before the closing
+			// quote would escape it. Program.Configure() appends one when the value
+			// does not already end in a separator.
+			clReflectAdditionalCompilerOptionsString.append(" -SD\"");
 			std::filesystem::path sourceDependencyFolderDirectory = ConfigData::GetSingleton()->GetConfigData().GetValue<std::string>("SYSTEM", "SOURCE_DEPENDENCIES_FOLDER_NAME");
 			clReflectAdditionalCompilerOptionsString.append(dooms::path::_GetCurrentPath(sourceDependencyFolderDirectory.generic_u8string()));
-			clReflectAdditionalCompilerOptionsString.append("\\");
+			clReflectAdditionalCompilerOptionsString.append("\"");
 
 			clReflectAdditionalCompilerOptionsString.append(" -ROOTCLASS_TYPENAME");
 			clReflectAdditionalCompilerOptionsString.append("dooms::DObject");
