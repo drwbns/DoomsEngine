@@ -16,41 +16,47 @@ Fix up draw order
 
 ### Implement config value setting window
 
-### Rebuild clscan so paths with spaces work
-Right now the project cannot live under a path containing spaces. `clscan.dll`
-splits its command line on spaces *before* honouring quotes, so a quoted path
-comes back with the quote character embedded in it:
+### DONE: clscan now handles paths with spaces
+`clscan.dll` used to split its command line on spaces with no quote handling, so a
+project under a path like `...\Graphics Engines and Projects\...` produced 127130
+`no such file or directory` errors and 132 clScan failures.
 
-    error: no such file or directory: 'Projects\Dooms-latest\Doom3\ThirdParty\nlohmann"'
+Fixed by rebuilding clReflect against LLVM 12.0.1 with a quote-aware tokenizer in
+`argvSplit` (clscan, clmerge and clexport all had the same copy-pasted bug), and
+restoring the matching quoting in `clReflect_automation`. A doubled quote is treated
+as a literal quote so the `-DVCXPROJ_PATH="""..."""` idiom still yields a valid string
+literal.
 
-Under `E:\source\Graphics Engines and Projects\Dooms-latest` this produced 127130
-`no such file or directory` errors and 132 clScan failures. The identical build run
-through a space-free `subst` drive produced zero errors, clScan 132/132, clMerge and
-clExport success, and a correctly regenerated `reflection_binary_Debug_x64.cppbin`.
+Verified on a path containing spaces: clScan 277/277, zero errors, clMerge success.
 
-`clscan.dll` is a prebuilt binary (Feb 2024), so this cannot be fixed from the engine
-or from `clReflect_automation`; quoting was tried at both layers and reverted. The fix
-has to be in clscan's own argument tokenizer.
+To rebuild the tools again:
+  * `extern/get.bat` says `release/11.x` but the code needs **12.x** -
+    `Main.cpp` calls `clang::tooling::CommonOptionsParser::create()`, a factory
+    added in LLVM 12.
+  * Configure LLVM into `extern/llvm-build` with `-DLLVM_ENABLE_PROJECTS=clang
+    -DLLVM_TARGETS_TO_BUILD=X86`, generator "Visual Studio 16 2019".
+  * Build only what is needed: `clangTooling clangFrontend clangSema clangParse
+    clangAnalysis clangLex clangBasic clangSerialization clangDriver clangAST
+    clangEdit LLVMSupport LLVMCore LLVMMC LLVMX86Info LLVMX86Desc
+    LLVMX86AsmParser LLVMX86CodeGen` - about 11 minutes on 16 cores.
+  * Then build the `clscan`, `clmerge` and `clexport` targets (shared libraries)
+    and copy the DLLs into `Doom3/x64/<Config>/`.
 
-To do it:
-  * Source is at `SungJJinKang/clReflect_ForDoomsEngine`, branch `doom_engine_version`
-    (commit `ccebec26`) — the one upstream repo that still exists. A vendored copy is
-    already in the repo root as `clReflect_ForDoomsEngine-doom_engine_version/`.
-  * Fix the tokenizer to honour double quotes, then rebuild `clscan.dll` and drop it
-    into `Doom3/x64/<Config>/`. It is an LLVM/clang-based build, so expect it to be
-    a large one.
-  * Once clscan honours quotes, restore the quoting in
-    `clReflect_automation/ParseAdditionalDirectories.cs` and
-    `clReflectCaller.GenerateClScanArguments` (both currently carry comments
-    explaining why they are deliberately unquoted).
+### clexport overruns its buffers on a large .map file
+`clexport -map` crashes on the Debug build's `map.map`. `MapFileParser.cpp` parses
+into fixed `char[1024]` buffers, but the longest line in a Debug map is 2875
+characters - long template symbol names blow straight past them. The prebuilt
+clexport had the same buffers and merely corrupted memory quietly; a Release build
+turns that into a hard crash.
 
-Until then, keep the project under a path with no spaces — and note this must apply at
-**build** time, not just at run time. `VCXPROJ_PATH` is baked into the binary at compile
-time via `-DVCXPROJ_PATH="$(ProjectPath)"`, and clReflect derives every source file path
-from it. An engine built under a spaced path but launched from a `subst`'d space-free
-drive still reports `E:\source\Graphics Engines and Projects\...` and still fails, so a
-permanent move beats a runtime `subst`.
+This is a pre-existing clReflect bug, unrelated to the quoting work.
 
-Note the separate, unrelated constraint: the prebuilt clscan uses clang 12.0.1, which
-cannot parse the VS2022 runtime headers, so the engine must be built with VS2019 /
-v142 and `VCToolsInstallDir` pointed at the VS2019 tools directory.
+Workaround: clexport succeeds without `-map` and still produces a valid .cppbin -
+what is lost is function call addresses, a limitation clReflect already documents.
+
+Fix properly by making MapFileParser size its buffers from the input (std::string
+or a dynamically grown buffer) rather than assuming 1024 characters.
+
+Note the separate, unrelated constraint: clscan uses clang 12.0.1, which cannot parse
+the VS2022 runtime headers, so the engine must be built with VS2019 / v142 and
+`VCToolsInstallDir` pointed at the VS2019 tools directory.
