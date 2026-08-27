@@ -3,7 +3,7 @@
 	url = https://github.com/SungJJinKang/clReflect_automation
 [submodule "Doom3/Source/Engine/Rendering/Culling/EveryCulling"]
 	path = Doom3/Source/Engine/Rendering/Culling/EveryCulling
-	url = https://github.com/SungJJinKang/EveryCulling.git
+	url = https://github.com/drwbns/EveryCulling.git
 [submodule "Doom3/Source/Core/Math/JINMATH"]
 	path = Doom3/Source/Core/Math/JINMATH
 	url = https://github.com/SungJJinKang/JINMATH.git
