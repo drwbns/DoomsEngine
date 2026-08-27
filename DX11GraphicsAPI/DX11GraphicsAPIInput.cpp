@@ -931,6 +931,9 @@ namespace dooms
 			return 1;
 		}
 
+		// Set once WM_QUIT arrives, which WM_DESTROY posts when the window closes.
+		static bool bIsWindowShouldClose = false;
+
 		DOOMS_ENGINE_GRAPHICS_API void PollEvents()
 		{
 			MSG msg = { 0 };
@@ -938,6 +941,14 @@ namespace dooms
 			{
 				if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 				{
+					if (WM_QUIT == msg.message)
+					{
+						// Nothing dispatches WM_QUIT, so record it here. Otherwise
+						// the window goes away and the game loop keeps running.
+						bIsWindowShouldClose = true;
+						break;
+					}
+
 					TranslateMessage(&msg);
 					DispatchMessage(&msg);
 				}
@@ -946,6 +957,11 @@ namespace dooms
 					break;
 				}
 			}
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API unsigned int IsWindowShouldClose()
+		{
+			return bIsWindowShouldClose ? 1u : 0u;
 		}
 
 		DOOMS_ENGINE_GRAPHICS_API void SetCursorMode(void* const platformWindow, const GraphicsAPIInput::eCursorMode cursorMode)

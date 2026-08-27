@@ -167,6 +167,12 @@ namespace dooms
 			typedef unsigned int (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_POLLEVENTS)(void);
 			extern GRAPHICS_POLLEVENTS PollEvents;
 
+			// Non-zero once the platform window has been closed. Without this the
+			// game loop has nothing to stop on but the escape key, so closing the
+			// window destroyed it and left the loop spinning forever.
+			typedef unsigned int (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_ISWINDOWSHOULDCLOSE)(void);
+			extern GRAPHICS_ISWINDOWSHOULDCLOSE IsWindowShouldClose;
+
 
 			typedef unsigned int (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_SETCURSORMODE)(void* platformWindow, eCursorMode);
 			extern GRAPHICS_SETCURSORMODE SetCursorMode;

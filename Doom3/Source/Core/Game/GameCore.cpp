@@ -296,14 +296,19 @@ bool dooms::GameCore::Tick()
 	OnEndOfFrame();
 	D_END_PROFILING(OnEndOfFrame);
 
-	if (dooms::userinput::UserInput_Server::GetKeyUp(dooms::input::GraphicsAPIInput::eKEY_CODE::KEY_ESCAPE) == false)
-	{
-		return true;
-	}
-	else
+	// Closing the window has to end the loop too. It used to be escape or
+	// nothing: WM_DESTROY tore the window down and posted WM_QUIT, but no one
+	// acted on it, so the loop carried on and left a windowless process
+	// spinning that could only be killed from Task Manager.
+	// Guarded because the pointer is resolved with GetProcAddress and stays
+	// null against a graphics DLL that predates this entry point.
+	if ((dooms::input::GraphicsAPIInput::IsWindowShouldClose != nullptr) &&
+		(dooms::input::GraphicsAPIInput::IsWindowShouldClose() != 0))
 	{
 		return false;
 	}
+
+	return (dooms::userinput::UserInput_Server::GetKeyUp(dooms::input::GraphicsAPIInput::eKEY_CODE::KEY_ESCAPE) == false);
 
 	
 }

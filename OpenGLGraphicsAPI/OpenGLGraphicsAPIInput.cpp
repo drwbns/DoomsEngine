@@ -651,6 +651,15 @@ namespace dooms
 			glfwPollEvents();
 		}
 
+		DOOMS_ENGINE_GRAPHICS_API unsigned int IsWindowShouldClose()
+		{
+			// glfw already tracks the close flag; the window is reachable from any
+			// translation unit through the current context.
+			GLFWwindow* const window = glfwGetCurrentContext();
+
+			return ((window != nullptr) && (glfwWindowShouldClose(window) != 0)) ? 1u : 0u;
+		}
+
 		DOOMS_ENGINE_GRAPHICS_API void SetCursorMode(void* const platformWindow, const GraphicsAPIInput::eCursorMode cursorMode)
 		{
 			glfwSetInputMode(reinterpret_cast<GLFWwindow*>(platformWindow), GLFW_CURSOR, input::opengl::GetGLCursorMode(cursorMode));
