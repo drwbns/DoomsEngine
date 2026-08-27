@@ -42,20 +42,22 @@ To rebuild the tools again:
   * Then build the `clscan`, `clmerge` and `clexport` targets (shared libraries)
     and copy the DLLs into `Doom3/x64/<Config>/`.
 
-### clexport overruns its buffers on a large .map file
-`clexport -map` crashes on the Debug build's `map.map`. `MapFileParser.cpp` parses
-into fixed `char[1024]` buffers, but the longest line in a Debug map is 2875
-characters - long template symbol names blow straight past them. The prebuilt
-clexport had the same buffers and merely corrupted memory quietly; a Release build
-turns that into a hard crash.
+### DONE: clexport handles a large .map file
+`clexport -map` used to die silently on the Debug build's 27MB `map.map`. The cause
+was an off-by-one in `ConsumeToken` (clReflectCore/FileUtils.cpp): it stopped copying
+at `dest + dest_size` and then wrote the NUL terminator at `*dest`, one byte past the
+caller's buffer. 904 lines in that map exceed 1024 characters - decorated template
+symbols run to nearly 3000 - so the 1024-byte stack buffers in `MapFileParser` were
+overrun. The prebuilt binary corrupted memory quietly; a Release build with /GS turns
+it into a hard crash with no diagnostic.
 
-This is a pre-existing clReflect bug, unrelated to the quoting work.
+`ConsumeToken` now reserves the last byte for the terminator, and MapFileParser's
+buffers went from 1024 to 4096 so long symbols are parsed rather than truncated.
+clexport now emits a 236207 byte .cppbin from the full map - the same size the
+original working build produced.
 
-Workaround: clexport succeeds without `-map` and still produces a valid .cppbin -
-what is lost is function call addresses, a limitation clReflect already documents.
-
-Fix properly by making MapFileParser size its buffers from the input (std::string
-or a dynamically grown buffer) rather than assuming 1024 characters.
+Since `ConsumeToken` is shared, this removes the same latent overrun from every
+other caller in clReflect.
 
 Note the separate, unrelated constraint: clscan uses clang 12.0.1, which cannot parse
 the VS2022 runtime headers, so the engine must be built with VS2019 / v142 and
