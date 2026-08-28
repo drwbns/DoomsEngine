@@ -1,0 +1,132 @@
+# Plan A — Rendering & Culling Research Harness
+
+The original goal, and the one the codebase is already shaped for: a tool for
+implementing rendering and culling techniques and **measuring them against each
+other** in the same scene.
+
+## Why this fits
+
+Three things already here are hard to build and rare to find together:
+
+- **Live reflection-driven inspection.** clReflect exposes any `D_PROPERTY` in
+  the inspector at runtime. Tuning a culling parameter and seeing the effect
+  without a rebuild is the core loop of this kind of work.
+- **A culling module framework.** `EveryCulling::SetEnabledCullingModule` with
+  per-module `IsEnabled` flags, plus `OnStartCullingModule` /
+  `OnEndCullingModule` hooks that are begging to be timing instrumentation.
+- **Two graphics backends** behind a function-pointer DLL boundary, so the same
+  technique can be compared across D3D11 and OpenGL.
+
+It also routes around every major gap: a harness needs no audio, no physics, no
+scene serialization, and no shipping-grade profiler.
+
+## Phases
+
+### 1. Foundation
+
+Small, and everything else leans on it.
+
+- **Overdraw framebuffer resize.** `OverDrawVisualization` sizes its framebuffer
+  from the screen at creation and is not rebuilt on resize, so it is wrong after
+  any window change. Blocks phase 2.
+- **Camera position/rotation readout** in the Display panel. Currently there is
+  no way to read camera state; during this session that repeatedly made it
+  impossible to tell camera movement from scene animation when verifying
+  changes. Cheap, and it pays for itself immediately.
+
+### 2. Visualisation
+
+Mostly surfacing what exists rather than building new.
+
+Already implemented but buried on a demo component
+(`PortfolioComponent.cpp:35-38`):
+
+| Toggle | Drives |
+| --- | --- |
+| `See_MaskedSWOcclusionCulling_Occluder` | `IsDrawMaskedOcclusionCullingBinTriangleStageDebugger` |
+| `See_MaskedSWOcclusionCulling_DepthBuffer` | `IsDrawMaskedOcclusionCullingTileL0MaxDepthValueDebugger` |
+| `See_MaskedSWOcclusionCulling_OccluderBoudingBox` | `IsDrawMaskedOcclusionCullingOcculderBoundingBoxDebugger` |
+
+Also present and disabled in `config.ini`: `OVERDRAW_VISUALIZATION`,
+`DRAW_MASKED_OCCLUSION_CULLING_TILE_COVERAGE_MASK_DEBUGGER`.
+
+Work:
+
+- A dedicated **Visualisation panel**, so these are discoverable rather than
+  hidden behind a demo component's checkboxes.
+- A proper **colour ramp** for the per-tile data. The binned-triangle-count and
+  L0-max-depth debuggers are already per-tile, which is exactly heatmap-shaped;
+  they just render as raw debug draws today.
+- **Occluder visualisation**: which objects were chosen as occluders, and which
+  were rejected and why.
+
+### 3. Measurement spine
+
+The part that turns a viewer into a harness. Without it you can implement a new
+method but cannot honestly say whether it is better.
+
+- **Per-module timing** on the existing `OnStartCullingModule` /
+  `OnEndCullingModule` hooks: time per module, objects tested, objects culled.
+- **Unreal-style stat display** — `stat fps`, `stat unit`, `stat detailed`,
+  `stat none`. The overlay mode (F2) already exists as the presentation vehicle.
+- **GPU timing.** There is none anywhere in the engine today; this is the real
+  work in this phase. D3D11 timestamp queries need a ring buffer, since results
+  land a frame or two late.
+- Note that `D_START_PROFILING` compiles out unless `PROFILING_RELEASE_MODE`,
+  and its data is averaged over a full second — right for `stat detailed`, wrong
+  for per-frame `stat unit`, which needs its own lightweight path.
+
+### 4. Method selection
+
+- A **culling panel** driving the existing `SetEnabledCullingModule`, so methods
+  can be switched at runtime and compared without a rebuild.
+- Combine with phase 3 so switching a method immediately shows its cost.
+
+### 5. Tests around the culling math
+
+Deliberately before new techniques, not after.
+
+`unit_tests` currently contains **zero source files**. For a harness whose
+output is comparative numbers, this is the gap that undermines the results
+themselves: a wrong number and a real number look identical.
+
+The `ConsumeToken` off-by-one found in this codebase had been silently
+corrupting memory for years and would have been caught by a five-line test.
+
+Minimum worth having:
+
+- Frustum culling: known-inside, known-outside, straddling.
+- The tiled depth buffer: tile alignment, the rounding introduced by
+  `EveryCulling::SetResolution`, resize correctness.
+- Occludee/occluder selection at known configurations.
+
+### 6. New techniques
+
+With the harness in place, implement something genuinely absent to prove the
+framework accommodates new ideas. **GPU Hi-Z occlusion culling** is the natural
+candidate — see `PLAN-full-engine.md` for why the choice matters less than what
+it exposes.
+
+The engine culls entirely on the CPU today. A GPU method produces results
+asynchronously, which will break assumptions in `CullingModule` and
+`SetEnabledCullingModule`. **That is the point.** If the interface cannot absorb
+it, that is worth knowing after one technique rather than five.
+
+Reference implementations already in this workspace:
+
+- `Hierarchical-Z-Buffer-master` — D3D11 Hi-Z, matching the engine's default API
+- `gl_occlusion_culling` — NVIDIA's batched compute culling with multi-draw-indirect
+
+## Definition of done
+
+The harness works when you can:
+
+1. Load a scene, pick two culling methods, and switch between them at runtime.
+2. Read per-method timing and cull counts side by side.
+3. See visually *why* a method culled what it did.
+4. Trust the numbers, because the math underneath has tests.
+
+## Deliberately out of scope
+
+Audio, physics, scene serialization, an editor, an asset pipeline, shipping
+profilers. All belong to Plan B and none are needed here.
