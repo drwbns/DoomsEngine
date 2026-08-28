@@ -21,6 +21,32 @@ void dooms::graphics::OverDrawVisualization::ShowOverDrawVisualizationPIP(const 
 	
 }
 
+void dooms::graphics::OverDrawVisualization::OnResolutionChanged()
+{
+	if (bmIsOverDrawVisualizationInitialized == false)
+	{
+		// Never built, so there is nothing sized to the old resolution.
+		return;
+	}
+
+	if (IsValid(OverDrawVisualizationPIP))
+	{
+		dooms::graphics::Graphics_Server::GetSingleton()->mPIPManager.RemovePIP(OverDrawVisualizationPIP);
+		OverDrawVisualizationPIP->SetIsPendingKill();
+	}
+	OverDrawVisualizationPIP = nullptr;
+
+	if (IsValid(mOverDrawVisualizationFrameBuffer))
+	{
+		mOverDrawVisualizationFrameBuffer->SetIsPendingKill();
+	}
+	mOverDrawVisualizationFrameBuffer = nullptr;
+
+	// Initialize is called lazily the next time overdraw visualisation is used,
+	// and will size everything to the new resolution.
+	bmIsOverDrawVisualizationInitialized = false;
+}
+
 void dooms::graphics::OverDrawVisualization::Initialize()
 {
 	dooms::asset::ShaderAsset* overDrawVisualizationShader = dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationShader.glsl");

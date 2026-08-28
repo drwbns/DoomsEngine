@@ -36,6 +36,13 @@ namespace dooms
 		public:
 
 			void Initialize() override;
+
+			/// <summary>
+			/// Drops the frame buffer and its picture-in-picture view after the
+			/// window has been resized. Both are sized from the screen when they
+			/// are created, and Initialize rebuilds them lazily on next use.
+			/// </summary>
+			void OnResolutionChanged();
 			void PreRender() override;
 			void Render(dooms::Camera* const targetCamera) override;
 			void PostRender() override;

@@ -1,5 +1,7 @@
 #include "DefaultGraphcisPipeLine.h"
 
+#include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
+
 #include <Graphics/graphicsSetting.h>
 #include <Rendering/Renderer/RendererStaticIterator.h>
 #include <Rendering/Acceleration/FrontToBackSorting/SortFrontToBackSolver.h>
@@ -79,6 +81,14 @@ void dooms::graphics::DefaultGraphcisPipeLine::ApplyPendingResolutionChange()
 	if (mRenderingCullingManager.mCullingSystem != nullptr)
 	{
 		mRenderingCullingManager.mCullingSystem->SetResolution(newWidth, newHeight);
+	}
+
+	// Sized from the screen when it is created, so it has to be dropped and
+	// rebuilt too. It is built lazily, so this only costs anything if overdraw
+	// visualisation has actually been used.
+	if (dooms::graphics::OverDrawVisualization::GetSingleton() != nullptr)
+	{
+		dooms::graphics::OverDrawVisualization::GetSingleton()->OnResolutionChanged();
 	}
 
 	D_RELEASE_LOG(eLogType::D_LOG, "Resolution changed to %u x %u", newWidth, newHeight);
