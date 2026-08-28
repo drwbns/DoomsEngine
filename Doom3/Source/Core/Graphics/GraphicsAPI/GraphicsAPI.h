@@ -30,6 +30,16 @@ namespace dooms
 			typedef eGraphicsAPIType(DOOMS_ENGINE_API_ENTRY_P GRAPHICS_FLUSH_CMD_QUEUE)(void);
 			extern GRAPHICS_FLUSH_CMD_QUEUE FlushCMDQueue;
 
+			// Reports a size change requested by the window, once per change.
+			// Returns non-zero when one was pending.
+			typedef unsigned int(DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CONSUME_PENDING_RESIZE)(unsigned int*, unsigned int*);
+			extern GRAPHICS_CONSUME_PENDING_RESIZE ConsumePendingResize;
+
+			// Rebuilds the swap chain buffers and their views at a new size.
+			// Only safe between frames. Returns non-zero on success.
+			typedef unsigned int(DOOMS_ENGINE_API_ENTRY_P GRAPHICS_RESIZE_SWAPCHAIN_BUFFERS)(unsigned int, unsigned int);
+			extern GRAPHICS_RESIZE_SWAPCHAIN_BUFFERS ResizeSwapChainBuffers;
+
 			/**
 			 * \brief TODO : Make inlined version function of this function for performance
 			 */

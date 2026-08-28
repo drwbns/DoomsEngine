@@ -50,8 +50,44 @@ void dooms::graphics::DefaultGraphcisPipeLine::LateInitialize()
 	mRenderingDebugger.LateInitialize();
 }
 
+void dooms::graphics::DefaultGraphcisPipeLine::ApplyPendingResolutionChange()
+{
+	// Null when running against a graphics DLL from before these entry points.
+	if (GraphicsAPI::ConsumePendingResize == nullptr || GraphicsAPI::ResizeSwapChainBuffers == nullptr)
+	{
+		return;
+	}
+
+	unsigned int newWidth = 0;
+	unsigned int newHeight = 0;
+
+	if (GraphicsAPI::ConsumePendingResize(&newWidth, &newHeight) == 0)
+	{
+		return;
+	}
+
+	if (GraphicsAPI::ResizeSwapChainBuffers(newWidth, newHeight) == 0)
+	{
+		D_RELEASE_LOG(eLogType::D_ERROR, "Failed to resize swap chain buffers to %u x %u", newWidth, newHeight);
+		return;
+	}
+
+	graphicsAPISetting::SetScreenSize(static_cast<INT32>(newWidth), static_cast<INT32>(newHeight));
+
+	// Resized in place rather than recreated: the culling system holds the
+	// registered entities, which recreating it would throw away.
+	if (mRenderingCullingManager.mCullingSystem != nullptr)
+	{
+		mRenderingCullingManager.mCullingSystem->SetResolution(newWidth, newHeight);
+	}
+
+	D_RELEASE_LOG(eLogType::D_LOG, "Resolution changed to %u x %u", newWidth, newHeight);
+}
+
 void dooms::graphics::DefaultGraphcisPipeLine::PreRender()
 {
+	ApplyPendingResolutionChange();
+
 	D_START_PROFILING(PreRenderRenderer, dooms::profiler::eProfileLayers::Rendering);
 	PreRenderRenderer();
 	D_END_PROFILING(PreRenderRenderer);

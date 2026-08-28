@@ -23,6 +23,8 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 
 	
 	dooms::graphics::GraphicsAPI::FlushCMDQueue = (GraphicsAPI::GRAPHICS_FLUSH_CMD_QUEUE)GetProcAddress(hModule, "FlushCMDQueue");
+	dooms::graphics::GraphicsAPI::ConsumePendingResize = (GraphicsAPI::GRAPHICS_CONSUME_PENDING_RESIZE)GetProcAddress(hModule, "ConsumePendingResize");
+	dooms::graphics::GraphicsAPI::ResizeSwapChainBuffers = (GraphicsAPI::GRAPHICS_RESIZE_SWAPCHAIN_BUFFERS)GetProcAddress(hModule, "ResizeSwapChainBuffers");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::FlushCMDQueue != nullptr);
 	dooms::graphics::GraphicsAPI::_GetCurrentAPIType = (GraphicsAPI::GRAPHICS_GETCURRENTAPITYPE)GetProcAddress(hModule, "_GetCurrentAPIType");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::_GetCurrentAPIType != nullptr);

@@ -48,6 +48,13 @@ namespace dooms
 			D_PROPERTY()
 			RenderingCullingManager mRenderingCullingManager;
 
+			/// <summary>
+			/// Applies a window resize recorded by the graphics backend, if there
+			/// is one. Called at the top of PreRender, where the previous frame's
+			/// cull jobs have finished and this frame's have not started.
+			/// </summary>
+			void ApplyPendingResolutionChange();
+
 			D_PROPERTY()
 			RenderingDebugger mRenderingDebugger;
 

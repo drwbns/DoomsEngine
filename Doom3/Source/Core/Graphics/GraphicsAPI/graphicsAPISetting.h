@@ -34,6 +34,18 @@ namespace dooms
 			
 			extern void LoadData();
 			
+			/// <summary>
+			/// Updates the cached screen size after the window has been resized.
+			/// Everything sized from the resolution must be rebuilt separately.
+			/// </summary>
+			inline void SetScreenSize(const int width, const int height)
+			{
+				graphicsAPISetting::ScreenSize[0] = width;
+				graphicsAPISetting::ScreenSize[1] = height;
+				graphicsAPISetting::ScreenRatio =
+					static_cast<float>(width) / static_cast<float>(height);
+			}
+
 			inline int GetScreenWidth()
 			{
 				return graphicsAPISetting::ScreenSize[0];
