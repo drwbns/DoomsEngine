@@ -108,11 +108,22 @@ no GPU timing at all. You cannot profile what you ship.
 
 ## Risks worth naming
 
-**clReflect is the dependency to watch.** Upstream is deleted; the prebuilt
+**clReflect is the dependency to watch** — dormant rather than deleted, which
+is better than it first appears but still your problem.
+
+- `SungJJinKang/clReflect_ForDoomsEngine` is **alive and not archived**, default
+  branch `doom_engine_version`, with full history. Last actual push was
+  **February 2023**; later timestamps on the repo are metadata, not commits.
+- `SungJJinKang/clReflect_automation`, the C# harness that drives it, **is
+  deleted**. Only local copies and the drwbns mirror survive.
+
+So the C++ side can still be diffed or rebased against upstream if needed, but
+nothing is being maintained, and the tool that runs it is gone. The prebuilt
 `clscan` was built against clang 12 and had to be rebuilt from source during
 this session, including fixing a stack-corrupting off-by-one in `ConsumeToken`.
-You are now its maintainer. Everything in this plan leans on reflection, so
-budget for that ownership rather than discovering it later.
+
+In practice you are the maintainer. Everything in this plan leans on reflection,
+so budget for that ownership rather than discovering it later.
 
 **The fixed 1920×1080 G-buffer** is independent of screen resolution today.
 Fine for a demo, wrong for a shipping renderer.
