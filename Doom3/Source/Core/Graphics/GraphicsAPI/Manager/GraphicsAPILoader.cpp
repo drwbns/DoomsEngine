@@ -266,6 +266,7 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	dooms::input::GraphicsAPIInput::DeInitializeGraphisAPIInput = (dooms::input::GraphicsAPIInput::GRAPHICS_DEINITIALIZEGRAPHICSAPIINPUT)GetProcAddress(hModule, "DeInitializeGraphisAPIInput");
 	//D_ASSERT(dooms::input::GraphicsAPIInput::DeInitializeGraphisAPIInput != nullptr);
 	dooms::input::GraphicsAPIInput::PollEvents = (dooms::input::GraphicsAPIInput::GRAPHICS_POLLEVENTS)GetProcAddress(hModule, "PollEvents");
+	dooms::input::GraphicsAPIInput::SetMouseRelativeMode = (dooms::input::GraphicsAPIInput::GRAPHICS_SETMOUSERELATIVEMODE)GetProcAddress(hModule, "SetMouseRelativeMode");
 	dooms::input::GraphicsAPIInput::IsWindowShouldClose = (dooms::input::GraphicsAPIInput::GRAPHICS_ISWINDOWSHOULDCLOSE)GetProcAddress(hModule, "IsWindowShouldClose");
 	//D_ASSERT(dooms::input::GraphicsAPIInput::PollEvents != nullptr);
 	dooms::input::GraphicsAPIInput::SetCursorMode = (dooms::input::GraphicsAPIInput::GRAPHICS_SETCURSORMODE)GetProcAddress(hModule, "SetCursorMode");

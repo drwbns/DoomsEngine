@@ -40,6 +40,34 @@ namespace dooms
 
 			static input::GraphicsAPIInput::CursorEnterCallback mCursorEnterCallback = nullptr;
 			static input::GraphicsAPIInput::CursorPosition_Callback mCursorPosition_Callback = nullptr;
+
+			// In relative mode DirectXTK reports movement deltas rather than a
+			// cursor position, and the cursor stops moving at all. Those deltas
+			// are accumulated into a virtual position which is what gets handed
+			// to the engine, so its existing "current minus previous" delta
+			// still works and there is no window edge to run into.
+			static bool bIsRelativeMouseMode = false;
+			static float VirtualCursorX = 0.0f;
+			static float VirtualCursorY = 0.0f;
+
+			static void DispatchCursorPosition(const DirectX::Mouse::State& mouseState)
+			{
+				if (mCursorPosition_Callback == nullptr)
+				{
+					return;
+				}
+
+				if (bIsRelativeMouseMode)
+				{
+					VirtualCursorX += static_cast<float>(mouseState.x);
+					VirtualCursorY += static_cast<float>(mouseState.y);
+					mCursorPosition_Callback(VirtualCursorX, VirtualCursorY);
+				}
+				else
+				{
+					mCursorPosition_Callback(static_cast<float>(mouseState.x), static_cast<float>(mouseState.y));
+				}
+			}
 			static input::GraphicsAPIInput::Scroll_Callback mScroll_Callback = nullptr;
 			static input::GraphicsAPIInput::Key_Callback mKey_Callback = nullptr;
 			static input::GraphicsAPIInput::MouseButton_Callback mMouseButton_Callback = nullptr;
@@ -740,6 +768,9 @@ namespace dooms
 					dx11::DX11Mouse->ProcessMessage(msg, wParam, lParam);
 					const DirectX::Mouse::State currentState = dx11::DX11Mouse->GetState();
 
+					// Raw movement arrives as WM_INPUT once relative mode is on,
+					// so the cursor has to be dispatched from here as well.
+					DispatchCursorPosition(currentState);
 
 					mMouseButton_Callback
 					(
@@ -772,7 +803,7 @@ namespace dooms
 					dx11::DX11Mouse->ProcessMessage(msg, wParam, lParam);
 
 					const DirectX::Mouse::State __currentState = dx11::DX11Mouse->GetState();
-					mCursorPosition_Callback(__currentState.x, __currentState.y);
+					DispatchCursorPosition(__currentState);
 					mCursorEnterCallback(true);
 					return 0;
 
@@ -780,7 +811,7 @@ namespace dooms
 					dx11::DX11Mouse->ProcessMessage(msg, wParam, lParam);
 
 					const DirectX::Mouse::State ___currentState = dx11::DX11Mouse->GetState();
-					mCursorPosition_Callback(___currentState.x, ___currentState.y);
+					DispatchCursorPosition(___currentState);
 					return 0;
 
 
@@ -806,7 +837,7 @@ namespace dooms
 					dx11::DX11Keyboard->ProcessMessage(msg, wParam, lParam);
 
 					const DirectX::Mouse::State ____currentState = dx11::DX11Mouse->GetState();
-					mCursorPosition_Callback(____currentState.x, ____currentState.y);
+					DispatchCursorPosition(____currentState);
 					return 0;
 
 				default:
@@ -933,6 +964,35 @@ namespace dooms
 
 		// Set once WM_QUIT arrives, which WM_DESTROY posts when the window closes.
 		static bool bIsWindowShouldClose = false;
+
+		/// <summary>
+		/// Relative mouse mode: the cursor stops moving and only its movement is
+		/// reported, so looking around can turn without limit. Absolute mode
+		/// restores a normal cursor. Returns 1 on success.
+		/// </summary>
+		DOOMS_ENGINE_GRAPHICS_API unsigned int SetMouseRelativeMode(const unsigned int bEnable)
+		{
+			dx11::ConstructDX11MouseIfRequired();
+
+			if (dx11::DX11Mouse == nullptr)
+			{
+				return 0;
+			}
+
+			const bool bWantRelative = (bEnable != 0);
+
+			dx11::bIsRelativeMouseMode = bWantRelative;
+			dx11::DX11Mouse->SetMode(bWantRelative ? DirectX::Mouse::Mode::MODE_RELATIVE : DirectX::Mouse::Mode::MODE_ABSOLUTE);
+
+			if (bWantRelative)
+			{
+				// Nothing to clip against any more, and clipping would only
+				// reintroduce the edge that relative mode exists to remove.
+				ClipCursor(nullptr);
+			}
+
+			return 1;
+		}
 
 		DOOMS_ENGINE_GRAPHICS_API void PollEvents()
 		{

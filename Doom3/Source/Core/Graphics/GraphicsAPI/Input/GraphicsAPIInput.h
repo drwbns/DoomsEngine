@@ -164,6 +164,11 @@ namespace dooms
 			extern GRAPHICS_DEINITIALIZEGRAPHICSAPIINPUT DeInitializeGraphisAPIInput;
 
 
+			// Relative mouse mode: the cursor stops moving and only movement is
+			// reported, so looking around can turn without limit.
+			typedef unsigned int (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_SETMOUSERELATIVEMODE)(unsigned int);
+			extern GRAPHICS_SETMOUSERELATIVEMODE SetMouseRelativeMode;
+
 			typedef unsigned int (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_POLLEVENTS)(void);
 			extern GRAPHICS_POLLEVENTS PollEvents;
 

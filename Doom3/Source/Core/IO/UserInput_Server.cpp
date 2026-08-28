@@ -258,10 +258,25 @@ void UserInput_Server::SetIsMouseLookEnabled(bool isEnabled) noexcept
 {
 	UserInput_Server::bIsMouseLookEnabled = isEnabled;
 
-	// Hidden and locked while looking, so the pointer cannot drift off the
-	// window mid-turn; shown and free otherwise, for using the panels.
-	UserInput_Server::GetSingleton()->IsCursorVisible = (isEnabled == false);
-	UserInput_Server::GetSingleton()->IsCursorLockedInScreen = isEnabled;
+	// Relative mode reports movement rather than a position, so turning is not
+	// bounded by the window: a sweep can spin on the spot indefinitely.
+	if (dooms::input::GraphicsAPIInput::SetMouseRelativeMode != nullptr)
+	{
+		dooms::input::GraphicsAPIInput::SetMouseRelativeMode(isEnabled ? 1u : 0u);
+
+		// Hidden but deliberately not locked. Clipping to the window would put
+		// back the very edge that relative mode removes.
+		UserInput_Server::GetSingleton()->IsCursorVisible = (isEnabled == false);
+		UserInput_Server::GetSingleton()->IsCursorLockedInScreen = false;
+	}
+	else
+	{
+		// Older graphics DLL: fall back to hiding and clipping the cursor, which
+		// still stops at the window edge.
+		UserInput_Server::GetSingleton()->IsCursorVisible = (isEnabled == false);
+		UserInput_Server::GetSingleton()->IsCursorLockedInScreen = isEnabled;
+	}
+
 	UserInput_Server::GetSingleton()->UpdateCursorMode();
 }
 
