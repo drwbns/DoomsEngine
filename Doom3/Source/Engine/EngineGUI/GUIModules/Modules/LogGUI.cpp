@@ -1,5 +1,7 @@
 #include "LogGUI.h"
 
+
+#include <EngineGUI/EngineGUIPanel.h>
 #include <Core.h>
 
 #include "imgui.h"
@@ -154,7 +156,7 @@ void dooms::ui::LogGUI::Init()
 
 void dooms::ui::LogGUI::Render()
 {
-	if (ImGui::Begin("Log"))
+	if (dooms::ui::enginePanel::BeginPanel("Log"))
 	{
 		RenderMenuBar();
 
@@ -191,7 +193,7 @@ void dooms::ui::LogGUI::Render()
 		ImGui::EndChild();
 	}
 
-	ImGui::End();
+	dooms::ui::enginePanel::EndPanel();
 }
 
 

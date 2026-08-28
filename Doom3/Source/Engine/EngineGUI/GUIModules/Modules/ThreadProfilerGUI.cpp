@@ -1,5 +1,7 @@
 #include "ThreadProfilerGUI.h"
 
+
+#include <EngineGUI/EngineGUIPanel.h>
 #include <vector>
 #include <chrono>
 #include "imgui.h"
@@ -50,7 +52,7 @@ void dooms::ui::ThreadProfilerGUI::Render()
 {
 	UpdateThreadCycle();
 
-	if (ImGui::Begin("Thread Profiler ( QueryThreadCycleTime ( /s ) )"))
+	if (dooms::ui::enginePanel::BeginPanel("Thread Profiler ( QueryThreadCycleTime ( /s ) )"))
 	{
 		for (size_t Index = 0; Index < ThreadCycleContainerList.size(); Index++)
 		{
@@ -58,5 +60,5 @@ void dooms::ui::ThreadProfilerGUI::Render()
 		}
 	}
 
-	ImGui::End();
+	dooms::ui::enginePanel::EndPanel();
 }

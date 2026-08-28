@@ -1,5 +1,7 @@
 #include "MaskedOcclusionCulliingDebugger.h"
 
+
+#include <EngineGUI/EngineGUIPanel.h>
 #include <Rendering/Graphics_Server.h>
 #include "imgui.h"
 #include <Rendering/Culling/EveryCulling/CullingModule/MaskedSWOcclusionCulling/MaskedSWOcclusionCulling.h>
@@ -113,17 +115,17 @@ void dooms::ui::MaskedOcclusionCulliingDebugger::Init()
 
 void dooms::ui::MaskedOcclusionCulliingDebugger::Render()
 {
-	if (ImGui::Begin("Masked SW Occlusion Culling Debugger ( Binned Triangle Count of Tile )"))
+	if (dooms::ui::enginePanel::BeginPanel("Masked SW Occlusion Culling Debugger ( Binned Triangle Count of Tile )"))
 	{
 		RenderBinnedTriangles();
 	}
-	ImGui::End();
+	dooms::ui::enginePanel::EndPanel();
 
-	if (ImGui::Begin("Masked SW Occlusion Culling Debugger ( L0 Max Depth Value of SubTile )"))
+	if (dooms::ui::enginePanel::BeginPanel("Masked SW Occlusion Culling Debugger ( L0 Max Depth Value of SubTile )"))
 	{
 		RenderL0MaxDepthValue();
 	}
-	ImGui::End();
+	dooms::ui::enginePanel::EndPanel();
 	
 }
 

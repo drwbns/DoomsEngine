@@ -8,6 +8,15 @@
 #include "engineGUIServerHelper.h"
 #include "GUIModules/EngineGUIModule.h"
 
+// DockBuilder, used to lay the panels out the first time the dockspace appears.
+#include <imgui_internal.h>
+
+#include "EngineGUIPanel.h"
+
+#include <cstring>
+
+#include <IO/UserInput_Server.h>
+
 bool dooms::ui::EngineGUIServer::DestroyImgui()
 {
     const bool isSuccess = dooms::graphics::PlatformImgui::ShutDownPlatformImgui();
@@ -17,12 +26,186 @@ bool dooms::ui::EngineGUIServer::DestroyImgui()
     return isSuccess;
 }
 
+
+// ---------------------------------------------------------------------------
+// Panel presentation
+// ---------------------------------------------------------------------------
+namespace
+{
+    dooms::ui::eEngineGUIDisplayMode gDisplayMode = dooms::ui::eEngineGUIDisplayMode::All;
+    char gFocusedPanelName[128] = "DrawCall";
+    FLOAT32 gOverlayAlpha = 0.35f;
+
+    // Whether the last BeginPanel actually opened a window, so EndPanel knows
+    // if it owes ImGui a matching End().
+    bool gPanelWindowOpened = false;
+}
+
+namespace dooms
+{
+    namespace ui
+    {
+        namespace enginePanel
+        {
+            eEngineGUIDisplayMode GetDisplayMode() { return gDisplayMode; }
+            void SetDisplayMode(const eEngineGUIDisplayMode displayMode) { gDisplayMode = displayMode; }
+
+            const char* GetFocusedPanelName() { return gFocusedPanelName; }
+
+            void SetFocusedPanelName(const char* const panelName)
+            {
+                // Bounded copy, always terminated. Avoids strncpy, which MSVC
+                // rejects here, and never leaves the buffer unterminated.
+                const size_t capacity = sizeof(gFocusedPanelName);
+                size_t index = 0;
+
+                if (panelName != nullptr)
+                {
+                    for (; (index + 1) < capacity && panelName[index] != 0; index++)
+                    {
+                        gFocusedPanelName[index] = panelName[index];
+                    }
+                }
+
+                gFocusedPanelName[index] = 0;
+            }
+
+            FLOAT32 GetOverlayAlpha() { return gOverlayAlpha; }
+
+            void SetOverlayAlpha(const FLOAT32 alpha)
+            {
+                gOverlayAlpha = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha);
+            }
+
+            bool BeginPanel(const char* const panelName)
+            {
+                gPanelWindowOpened = false;
+
+                if (gDisplayMode == eEngineGUIDisplayMode::Hidden)
+                {
+                    return false;
+                }
+
+                if (gDisplayMode == eEngineGUIDisplayMode::FocusedOverlay)
+                {
+                    if (std::strcmp(panelName, gFocusedPanelName) != 0)
+                    {
+                        return false;
+                    }
+
+                    // No chrome, translucent, pinned to the top right and sized
+                    // to its contents, so it reads as an overlay on the scene
+                    // rather than a window.
+                    const ImGuiViewport* const viewport = ImGui::GetMainViewport();
+                    const ImVec2 corner(
+                        viewport->WorkPos.x + viewport->WorkSize.x - 12.0f,
+                        viewport->WorkPos.y + 12.0f);
+
+                    ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+                    ImGui::SetNextWindowBgAlpha(gOverlayAlpha);
+
+                    const ImGuiWindowFlags overlayFlags =
+                        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
+                        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+                        ImGuiWindowFlags_NoMove;
+
+                    const bool isVisible = ImGui::Begin(panelName, nullptr, overlayFlags);
+                    gPanelWindowOpened = true;
+                    return isVisible;
+                }
+
+                const bool isVisible = ImGui::Begin(panelName);
+                gPanelWindowOpened = true;
+                return isVisible;
+            }
+
+            void EndPanel()
+            {
+                if (gPanelWindowOpened)
+                {
+                    ImGui::End();
+                    gPanelWindowOpened = false;
+                }
+            }
+        }
+    }
+}
+
+namespace
+{
+    // A full-viewport host window that every panel docks into. It draws no
+    // background and uses a pass-through central node, so the rendered scene
+    // stays visible wherever nothing is docked.
+    void BeginEngineDockSpace()
+    {
+        const ImGuiViewport* const viewport = ImGui::GetMainViewport();
+
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
+
+        const ImGuiWindowFlags hostFlags =
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDocking;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+        ImGui::Begin("DoomsEngineDockSpaceHost", nullptr, hostFlags);
+
+        ImGui::PopStyleVar(3);
+
+        const ImGuiID dockSpaceID = ImGui::GetID("DoomsEngineDockSpace");
+
+        // Lay the panels out once, when the dockspace has no layout yet. A
+        // layout restored from imgui.ini leaves the node populated, so an
+        // arrangement the user has set up themselves is never overwritten.
+        if (ImGui::DockBuilderGetNode(dockSpaceID) == nullptr)
+        {
+            ImGui::DockBuilderAddNode(dockSpaceID, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockSpaceID, viewport->WorkSize);
+
+            // Keep the middle free for the scene, and put panels around it.
+            ImGuiID centre = dockSpaceID;
+            const ImGuiID left = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Left, 0.22f, nullptr, &centre);
+            const ImGuiID bottom = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Down, 0.28f, nullptr, &centre);
+
+            // Performance figures together, on the left.
+            ImGui::DockBuilderDockWindow("DrawCall", left);
+            ImGui::DockBuilderDockWindow("Profiler", left);
+            ImGui::DockBuilderDockWindow("Thread Profiler ( QueryThreadCycleTime ( /s ) )", left);
+
+            // Log and the culling debuggers share the bottom as tabs.
+            ImGui::DockBuilderDockWindow("Log", bottom);
+            ImGui::DockBuilderDockWindow("Masked SW Occlusion Culling Debugger ( Binned Triangle Count of Tile )", bottom);
+            ImGui::DockBuilderDockWindow("Masked SW Occlusion Culling Debugger ( L0 Max Depth Value of SubTile )", bottom);
+
+            ImGui::DockBuilderFinish(dockSpaceID);
+        }
+
+        ImGui::DockSpace(dockSpaceID, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+
+        ImGui::End();
+    }
+}
+
 void dooms::ui::EngineGUIServer::PreRender()
 {
     if (bmIsEngineGUIAvaliable == true)
     {
         graphics::PlatformImgui::PreRenderPlatformImgui();
         ImGui::NewFrame();
+
+        // Only host a dockspace when panels are docked; the overlay and hidden
+        // modes want the viewport left alone.
+        if (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::All)
+        {
+            BeginEngineDockSpace();
+        }
     }
 }
 
@@ -32,7 +215,12 @@ void dooms::ui::EngineGUIServer::Render()
 {
     if (bmIsEngineGUIAvaliable == true)
     {
-        dooms::ui::imguiWithReflection::UpdateGUI_DObjectsVisibleOnGUI();
+        // The reflection inspector opens a window per inspected object, so it
+        // only belongs in the docked view.
+        if (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::All)
+        {
+            dooms::ui::imguiWithReflection::UpdateGUI_DObjectsVisibleOnGUI();
+        }
      
         for(EngineGUIModule* module : mEngineGUIModules)
         {
@@ -122,6 +310,9 @@ bool dooms::ui::EngineGUIServer::InitializeImgui()
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
+	// Let panels be docked and tabbed instead of floating over one another.
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
 	//ImGui::StyleColorsClassic();
@@ -165,6 +356,54 @@ void dooms::ui::EngineGUIServer::Init()
 
 void dooms::ui::EngineGUIServer::Update()
 {
+    // Panels that can be focused as an overlay, in cycle order.
+    static const char* const focusablePanels[] =
+    {
+        "DrawCall",
+        "Profiler",
+        "Thread Profiler ( QueryThreadCycleTime ( /s ) )",
+        "Log",
+        "Masked SW Occlusion Culling Debugger ( Binned Triangle Count of Tile )",
+        "Masked SW Occlusion Culling Debugger ( L0 Max Depth Value of SubTile )"
+    };
+    constexpr INT32 focusablePanelCount = static_cast<INT32>(sizeof(focusablePanels) / sizeof(focusablePanels[0]));
+
+    using eKEY_CODE = dooms::input::GraphicsAPIInput::eKEY_CODE;
+
+    // F1 hides the interface entirely and brings it back docked.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F1))
+    {
+        enginePanel::SetDisplayMode(
+            (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::Hidden)
+                ? eEngineGUIDisplayMode::All
+                : eEngineGUIDisplayMode::Hidden);
+    }
+
+    // F2 swaps between the docked view and a single focused overlay.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F2))
+    {
+        enginePanel::SetDisplayMode(
+            (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::FocusedOverlay)
+                ? eEngineGUIDisplayMode::All
+                : eEngineGUIDisplayMode::FocusedOverlay);
+    }
+
+    // F3 steps through the panels, switching to the overlay if not already there.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F3))
+    {
+        static INT32 focusedPanelIndex = 0;
+
+        if (enginePanel::GetDisplayMode() != eEngineGUIDisplayMode::FocusedOverlay)
+        {
+            enginePanel::SetDisplayMode(eEngineGUIDisplayMode::FocusedOverlay);
+        }
+        else
+        {
+            focusedPanelIndex = (focusedPanelIndex + 1) % focusablePanelCount;
+        }
+
+        enginePanel::SetFocusedPanelName(focusablePanels[focusedPanelIndex]);
+    }
 }
 
 void dooms::ui::EngineGUIServer::OnEndOfFrame()

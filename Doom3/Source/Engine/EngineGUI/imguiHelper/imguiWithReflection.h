@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <EngineGUI/EngineGUIPanel.h>
 
 #include "imgui.h"
 
@@ -75,7 +76,7 @@ namespace dooms
 			{
 				static_assert(std::is_base_of_v<dooms::DObject, DOBJECT_TYPE> == true);
 
-				if (ImGui::Begin(uiLabel))
+				if (dooms::ui::enginePanel::BeginPanel(uiLabel))
 				{
 					ImGui::Text("Count : %d", dObjects.size());
 					ImGui::Spacing();
@@ -124,7 +125,7 @@ namespace dooms
 
 				}
 
-				ImGui::End();
+				dooms::ui::enginePanel::EndPanel();
 
 
 			}

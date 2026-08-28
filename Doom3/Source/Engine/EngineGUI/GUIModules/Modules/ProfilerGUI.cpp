@@ -1,5 +1,7 @@
 #include "ProfilerGUI.h"
 
+
+#include <EngineGUI/EngineGUIPanel.h>
 #include <utility>
 #include <mutex>
 #include <shared_mutex>
@@ -19,7 +21,7 @@ void dooms::ui::ProfilerGUI::Init()
 
 void dooms::ui::ProfilerGUI::Render()
 {
-	if (ImGui::Begin("Profiler"))
+	if (dooms::ui::enginePanel::BeginPanel("Profiler"))
 	{
 		for (auto& data : mProfilingDataContainer)
 		{
@@ -41,7 +43,7 @@ void dooms::ui::ProfilerGUI::Render()
 		}
 	}
 
-	ImGui::End();
+	dooms::ui::enginePanel::EndPanel();
 }
 
 void dooms::ui::ProfilerGUI::AddProfilingData(const char* const profilingTagName, const float time)

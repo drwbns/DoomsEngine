@@ -179,6 +179,12 @@ void dooms::GameCore::Update()
 	mUserImput_Server.UpdateInput();
 	D_END_PROFILING(mUserImput_Server_Update);
 
+	// Straight after input, so the GUI sees this frame's key presses. Nothing
+	// called this before, which is why its key handling never ran.
+	D_START_PROFILING(mEngineGUIServer_Update, eProfileLayers::CPU);
+	mEngineGUIServer.Update();
+	D_END_PROFILING(mEngineGUIServer_Update);
+
 	D_START_PROFILING(mJobSystem_Update, eProfileLayers::CPU);
 	ThreadManager.Update_Internal();
 	ThreadManager.Update();
