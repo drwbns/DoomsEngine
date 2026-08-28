@@ -23,8 +23,13 @@ void UserInput_Server::CursorEnterCallback(bool isEntered)
 
 void UserInput_Server::CursorPosition_Callback(FLOAT64 xpos, FLOAT64 ypos)
 {
-	UserInput_Server::mDeltaCursorScreenPosition.x = static_cast<FLOAT32>(xpos) - UserInput_Server::mCurrentCursorScreenPosition.x;
-	UserInput_Server::mDeltaCursorScreenPosition.y = static_cast<FLOAT32>(ypos) - UserInput_Server::mCurrentCursorScreenPosition.y;
+	// Accumulated, not replaced. Windows sends many mouse move messages per
+	// frame and PollEvents dispatches them all in one go, so overwriting here
+	// threw away everything but the final step and left looking around feeling
+	// like it was snapping. ResetCursorPosition zeroes this once a frame,
+	// immediately before those messages are dispatched.
+	UserInput_Server::mDeltaCursorScreenPosition.x += static_cast<FLOAT32>(xpos) - UserInput_Server::mCurrentCursorScreenPosition.x;
+	UserInput_Server::mDeltaCursorScreenPosition.y += static_cast<FLOAT32>(ypos) - UserInput_Server::mCurrentCursorScreenPosition.y;
 
 	dooms::userinput::UserInput_Server::mCurrentCursorScreenPosition.x = static_cast<FLOAT32>(xpos);
 	dooms::userinput::UserInput_Server::mCurrentCursorScreenPosition.y = static_cast<FLOAT32>(ypos);
