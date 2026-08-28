@@ -1,5 +1,7 @@
 #include "imguiWithReflection.h"
 
+#include <vector>
+
 #include <Core.h>
 
 #include <unordered_map>
@@ -423,15 +425,24 @@ void dooms::ui::imguiWithReflection::RemoveFromVisibleOnGUIDObjectList(DObject* 
 
 void dooms::ui::imguiWithReflection::UpdateGUI_DObjectsVisibleOnGUI()
 {
+	// Closed windows are collected and removed afterwards: removal swaps and
+	// pops, which would invalidate the iteration.
+	std::vector<dooms::DObject*> closedDObjects;
+
 	for (dooms::DObject* const dObjectVisibleOnGUI : dooms::ui::imguiWithReflection::mVisibleOnGUIDObjectList)
 	{
 		if(IsValid(dObjectVisibleOnGUI))
 		{
+			// Each window gets its own close flag. This used to be the
+			// engine-wide GUI enable flag, so closing a single inspector
+			// switched the whole interface off with no way to bring it back.
+			bool bIsWindowOpen = true;
+
 			if (
 				ImGui::Begin
 				(
 					dObjectVisibleOnGUI->GetDObjectName().empty() == false ? dObjectVisibleOnGUI->GetDObjectName().c_str() : dObjectVisibleOnGUI->GetTypeFullName(),
-					&(dooms::ui::EngineGUIServer::GetSingleton()->GetIsEngineGUIAvaliableRef())
+					&bIsWindowOpen
 				)
 				)
 			{
@@ -442,10 +453,20 @@ void dooms::ui::imguiWithReflection::UpdateGUI_DObjectsVisibleOnGUI()
 
 			ImGui::End();
 
+			if (bIsWindowOpen == false)
+			{
+				closedDObjects.push_back(dObjectVisibleOnGUI);
+			}
+
 
 			imguiWithReflectionHelper::ClearMultipleDrawChecker();
 		}
 		
+	}
+
+	for (dooms::DObject* const closedDObject : closedDObjects)
+	{
+		dooms::ui::imguiWithReflection::RemoveFromVisibleOnGUIDObjectList(closedDObject);
 	}
 }
 

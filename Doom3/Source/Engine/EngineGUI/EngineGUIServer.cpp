@@ -453,10 +453,17 @@ void dooms::ui::EngineGUIServer::Update()
     // F1 hides the interface entirely and brings it back docked.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F1))
     {
-        enginePanel::SetDisplayMode(
-            (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::Hidden)
-                ? eEngineGUIDisplayMode::All
-                : eEngineGUIDisplayMode::Hidden);
+        const bool bShouldShow = (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::Hidden);
+
+        enginePanel::SetDisplayMode(bShouldShow ? eEngineGUIDisplayMode::All : eEngineGUIDisplayMode::Hidden);
+
+        if (bShouldShow)
+        {
+            // Guaranteed way back. PreRender and Render bail out entirely when
+            // this is false, so without it anything that clears the flag leaves
+            // the interface unrecoverable.
+            bmIsEngineGUIAvaliable = true;
+        }
     }
 
     // F2 swaps between the docked view and a single focused overlay.
