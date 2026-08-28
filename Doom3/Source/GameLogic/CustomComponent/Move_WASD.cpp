@@ -59,9 +59,33 @@ void dooms::Move_WASD::UpdateComponent()
 
 	/////////
 
-	//math::Vector3 rotation{ UserInput_Server::GetDeltaMouseScreenPositionY(), -UserInput_Server::GetDeltaMouseScreenPositionX(), 0.0f };
 	math::Vector3 rotation{ 0.0f, 0.0f, 0.0f };
 	bool isRotated = false;
+
+	// Mouse look, while the right button is held. Gating it on a button keeps
+	// the cursor free for the interface the rest of the time, which matters
+	// when the whole point of the tool is reading panels while flying around.
+	if (UserInput_Server::GetMouseButtonPressing(dooms::input::GraphicsAPIInput::eMoustInput::MOUSE_BUTTON_RIGHT))
+	{
+		const FLOAT32 deltaX = UserInput_Server::GetDeltaMouseScreenPositionX();
+		const FLOAT32 deltaY = UserInput_Server::GetDeltaMouseScreenPositionY();
+
+		if ((deltaX != 0.0f) || (deltaY != 0.0f))
+		{
+			// Applied directly rather than through the normalise-and-scale path
+			// below: mouse movement already carries its own magnitude, and
+			// normalising would throw that away and make every flick identical.
+			const math::Vector3 mouseRotation
+			{
+				deltaY * mMouseLookSensitivity,
+				-deltaX * mMouseLookSensitivity,
+				0.0f
+			};
+
+			GetTransform()->Rotate(mouseRotation, eSpace::Self);
+		}
+	}
+
 	if (UserInput_Server::GetKey(dooms::input::GraphicsAPIInput::eKEY_CODE::KEY_UP))
 	{
 		rotation.x += 1;

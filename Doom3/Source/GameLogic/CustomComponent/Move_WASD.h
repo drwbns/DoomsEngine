@@ -15,6 +15,10 @@ namespace dooms
 		D_PROPERTY()
 		FLOAT32 mRotationSpeed = 2.0f;
 
+		// Degrees of rotation per pixel of mouse movement while looking.
+		D_PROPERTY()
+		FLOAT32 mMouseLookSensitivity = 0.15f;
+
 	protected:
 
 		void InitComponent() override;
