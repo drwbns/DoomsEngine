@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include <IO/UserInput_Server.h>
+#include <Graphics/GraphicsAPI/graphicsAPISetting.h>
 
 bool dooms::ui::EngineGUIServer::DestroyImgui()
 {
@@ -197,6 +198,7 @@ namespace
 
             // Performance figures together on the right.
             ImGui::DockBuilderDockWindow("DrawCall", right);
+            ImGui::DockBuilderDockWindow("Display", right);
             ImGui::DockBuilderDockWindow("Profiler", right);
             ImGui::DockBuilderDockWindow("Thread Profiler ( QueryThreadCycleTime ( /s ) )", right);
 
@@ -211,6 +213,60 @@ namespace
         ImGui::DockSpace(dockSpaceID, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 
         ImGui::End();
+    }
+}
+
+namespace
+{
+    void ToggleBorderlessFullscreen()
+    {
+        using namespace dooms::graphics;
+
+        if (GraphicsAPI::SetBorderlessFullscreen == nullptr || GraphicsAPI::IsBorderlessFullscreen == nullptr)
+        {
+            return;
+        }
+
+        const unsigned int bIsFullscreen = GraphicsAPI::IsBorderlessFullscreen();
+        GraphicsAPI::SetBorderlessFullscreen(bIsFullscreen != 0 ? 0u : 1u);
+    }
+
+    void RenderDisplayPanel()
+    {
+        using namespace dooms::graphics;
+
+        if (dooms::ui::enginePanel::BeginPanel("Display"))
+        {
+            ImGui::Text("Resolution   : %d x %d", graphicsAPISetting::GetScreenWidth(), graphicsAPISetting::GetScreenHeight());
+            ImGui::Text("Aspect ratio : %.4f", graphicsAPISetting::GetScreenRatio());
+            ImGui::Text("Multisample  : %u", graphicsAPISetting::GetMultiSamplingNum());
+
+            const bool bIsSupported =
+                (GraphicsAPI::SetBorderlessFullscreen != nullptr) &&
+                (GraphicsAPI::IsBorderlessFullscreen != nullptr);
+
+            ImGui::Separator();
+
+            if (bIsSupported == false)
+            {
+                // Older graphics DLLs do not export these.
+                ImGui::Text("Window mode  : unavailable");
+            }
+            else
+            {
+                const bool bIsFullscreen = (GraphicsAPI::IsBorderlessFullscreen() != 0);
+                ImGui::Text("Window mode  : %s", bIsFullscreen ? "Borderless fullscreen" : "Windowed");
+
+                if (ImGui::Button(bIsFullscreen ? "Switch to windowed" : "Switch to borderless fullscreen"))
+                {
+                    ToggleBorderlessFullscreen();
+                }
+
+                ImGui::SameLine();
+                ImGui::TextDisabled("(F11)");
+            }
+        }
+        dooms::ui::enginePanel::EndPanel();
     }
 }
 
@@ -243,6 +299,8 @@ void dooms::ui::EngineGUIServer::Render()
             dooms::ui::imguiWithReflection::UpdateGUI_DObjectsVisibleOnGUI();
         }
      
+        RenderDisplayPanel();
+
         for(EngineGUIModule* module : mEngineGUIModules)
         {
             D_ASSERT(IsValid(module));
@@ -381,6 +439,7 @@ void dooms::ui::EngineGUIServer::Update()
     static const char* const focusablePanels[] =
     {
         "DrawCall",
+        "Display",
         "Profiler",
         "Thread Profiler ( QueryThreadCycleTime ( /s ) )",
         "Log",
@@ -407,6 +466,12 @@ void dooms::ui::EngineGUIServer::Update()
             (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::FocusedOverlay)
                 ? eEngineGUIDisplayMode::All
                 : eEngineGUIDisplayMode::FocusedOverlay);
+    }
+
+    // F11 toggles borderless fullscreen, the usual binding for it.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F11))
+    {
+        ToggleBorderlessFullscreen();
     }
 
     // F4 puts the panels back into the default arrangement.

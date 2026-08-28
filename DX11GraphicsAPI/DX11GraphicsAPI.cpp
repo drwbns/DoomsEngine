@@ -234,6 +234,13 @@ namespace dooms
             // WM_SIZE arrives on the window thread and must not touch the device,
             // so the new size is only recorded here and acted on later by the
             // engine, between frames.
+            // Borderless fullscreen state. Exclusive fullscreen is deliberately
+            // avoided: it brings device loss and alt-tab handling that a
+            // diagnostic tool does not need.
+            static bool bIsBorderlessFullscreen = false;
+            static RECT WindowedRect = {};
+            static LONG_PTR WindowedStyle = 0;
+
             static bool bIsResizePending = false;
             static unsigned int PendingResizeWidth = 0;
             static unsigned int PendingResizeHeight = 0;
@@ -1168,6 +1175,69 @@ namespace dooms
             dx11::g_pImmediateContext->RSSetViewports(1, &viewport);
 
             return 1;
+        }
+
+        /// <summary>
+        /// Switches between a normal window and borderless fullscreen on the
+        /// monitor the window currently sits on. The resulting WM_SIZE drives
+        /// the usual resize path, so nothing else has to be rebuilt here.
+        /// Returns 1 on success.
+        /// </summary>
+        DOOMS_ENGINE_GRAPHICS_API unsigned int SetBorderlessFullscreen(const unsigned int bEnable)
+        {
+            if (dx11::g_hWnd == nullptr)
+            {
+                return 0;
+            }
+
+            const bool bWantFullscreen = (bEnable != 0);
+            if (bWantFullscreen == dx11::bIsBorderlessFullscreen)
+            {
+                return 1;
+            }
+
+            if (bWantFullscreen)
+            {
+                // Remember how to put the window back.
+                dx11::WindowedStyle = GetWindowLongPtr(dx11::g_hWnd, GWL_STYLE);
+                GetWindowRect(dx11::g_hWnd, &dx11::WindowedRect);
+
+                HMONITOR monitor = MonitorFromWindow(dx11::g_hWnd, MONITOR_DEFAULTTONEAREST);
+                MONITORINFO monitorInfo = {};
+                monitorInfo.cbSize = sizeof(monitorInfo);
+                if (GetMonitorInfo(monitor, &monitorInfo) == 0)
+                {
+                    return 0;
+                }
+
+                SetWindowLongPtr(dx11::g_hWnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+                SetWindowPos(
+                    dx11::g_hWnd, HWND_TOP,
+                    monitorInfo.rcMonitor.left,
+                    monitorInfo.rcMonitor.top,
+                    monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                    monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                    SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+            }
+            else
+            {
+                SetWindowLongPtr(dx11::g_hWnd, GWL_STYLE, dx11::WindowedStyle);
+                SetWindowPos(
+                    dx11::g_hWnd, HWND_NOTOPMOST,
+                    dx11::WindowedRect.left,
+                    dx11::WindowedRect.top,
+                    dx11::WindowedRect.right - dx11::WindowedRect.left,
+                    dx11::WindowedRect.bottom - dx11::WindowedRect.top,
+                    SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+            }
+
+            dx11::bIsBorderlessFullscreen = bWantFullscreen;
+            return 1;
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API unsigned int IsBorderlessFullscreen()
+        {
+            return dx11::bIsBorderlessFullscreen ? 1 : 0;
         }
 
         DOOMS_ENGINE_GRAPHICS_API void FlushCMDQueue()

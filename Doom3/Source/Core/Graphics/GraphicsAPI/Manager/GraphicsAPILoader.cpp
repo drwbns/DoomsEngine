@@ -25,6 +25,8 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	dooms::graphics::GraphicsAPI::FlushCMDQueue = (GraphicsAPI::GRAPHICS_FLUSH_CMD_QUEUE)GetProcAddress(hModule, "FlushCMDQueue");
 	dooms::graphics::GraphicsAPI::ConsumePendingResize = (GraphicsAPI::GRAPHICS_CONSUME_PENDING_RESIZE)GetProcAddress(hModule, "ConsumePendingResize");
 	dooms::graphics::GraphicsAPI::ResizeSwapChainBuffers = (GraphicsAPI::GRAPHICS_RESIZE_SWAPCHAIN_BUFFERS)GetProcAddress(hModule, "ResizeSwapChainBuffers");
+	dooms::graphics::GraphicsAPI::SetBorderlessFullscreen = (GraphicsAPI::GRAPHICS_SET_BORDERLESS_FULLSCREEN)GetProcAddress(hModule, "SetBorderlessFullscreen");
+	dooms::graphics::GraphicsAPI::IsBorderlessFullscreen = (GraphicsAPI::GRAPHICS_IS_BORDERLESS_FULLSCREEN)GetProcAddress(hModule, "IsBorderlessFullscreen");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::FlushCMDQueue != nullptr);
 	dooms::graphics::GraphicsAPI::_GetCurrentAPIType = (GraphicsAPI::GRAPHICS_GETCURRENTAPITYPE)GetProcAddress(hModule, "_GetCurrentAPIType");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::_GetCurrentAPIType != nullptr);

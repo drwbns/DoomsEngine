@@ -40,6 +40,14 @@ namespace dooms
 			typedef unsigned int(DOOMS_ENGINE_API_ENTRY_P GRAPHICS_RESIZE_SWAPCHAIN_BUFFERS)(unsigned int, unsigned int);
 			extern GRAPHICS_RESIZE_SWAPCHAIN_BUFFERS ResizeSwapChainBuffers;
 
+			// Borderless fullscreen on the monitor the window is on. The
+			// resulting size change drives the normal resize path.
+			typedef unsigned int(DOOMS_ENGINE_API_ENTRY_P GRAPHICS_SET_BORDERLESS_FULLSCREEN)(unsigned int);
+			extern GRAPHICS_SET_BORDERLESS_FULLSCREEN SetBorderlessFullscreen;
+
+			typedef unsigned int(DOOMS_ENGINE_API_ENTRY_P GRAPHICS_IS_BORDERLESS_FULLSCREEN)(void);
+			extern GRAPHICS_IS_BORDERLESS_FULLSCREEN IsBorderlessFullscreen;
+
 			/**
 			 * \brief TODO : Make inlined version function of this function for performance
 			 */
