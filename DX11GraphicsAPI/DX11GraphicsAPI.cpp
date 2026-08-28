@@ -230,6 +230,13 @@ namespace dooms
             static ID3D11RenderTargetView* BackBufferRenderTargetView = nullptr;
             static ID3D11Texture2D* g_pDepthStencil = nullptr;
             static ID3D11DepthStencilView* BackBufferDepthStencilView = nullptr;
+
+            // WM_SIZE arrives on the window thread and must not touch the device,
+            // so the new size is only recorded here and acted on later by the
+            // engine, between frames.
+            static bool bIsResizePending = false;
+            static unsigned int PendingResizeWidth = 0;
+            static unsigned int PendingResizeHeight = 0;
             static ID3D11SamplerState* g_pSamplerLinear = nullptr;
             static unsigned int SyncInterval = 0;
             static unsigned int DrawCallCounter = 0;
@@ -1009,10 +1016,18 @@ namespace dooms
                 case WM_SIZE:
                     if (dooms::graphics::dx11::GetDevice() != NULL && wParam != SIZE_MINIMIZED)
                     {
-                        //assert(false);
-                        //CleanupRenderTarget();
-                        //g_pSwapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam), DXGI_FORMAT_UNKNOWN, 0);
-                        //CreateRenderTarget();
+                        // Record only. Resizing here would destroy render targets
+                        // out from under a frame that may be in flight, so the
+                        // engine picks this up and resizes between frames.
+                        const unsigned int newWidth = static_cast<unsigned int>(LOWORD(lParam));
+                        const unsigned int newHeight = static_cast<unsigned int>(HIWORD(lParam));
+
+                        if (newWidth > 0 && newHeight > 0)
+                        {
+                            dooms::graphics::dx11::PendingResizeWidth = newWidth;
+                            dooms::graphics::dx11::PendingResizeHeight = newHeight;
+                            dooms::graphics::dx11::bIsResizePending = true;
+                        }
                     }
                     return 0;
 
@@ -1037,6 +1052,123 @@ namespace dooms
                 return g_pImmediateContext;
             }
 		}
+
+        /// <summary>
+        /// Reports a size change requested by the window, clearing it so each
+        /// change is reported once. Returns 1 when one was pending.
+        /// </summary>
+        DOOMS_ENGINE_GRAPHICS_API unsigned int ConsumePendingResize(unsigned int* const outWidth, unsigned int* const outHeight)
+        {
+            if (dx11::bIsResizePending == false)
+            {
+                return 0;
+            }
+
+            if (outWidth != nullptr)
+            {
+                *outWidth = dx11::PendingResizeWidth;
+            }
+            if (outHeight != nullptr)
+            {
+                *outHeight = dx11::PendingResizeHeight;
+            }
+
+            dx11::bIsResizePending = false;
+            return 1;
+        }
+
+        /// <summary>
+        /// Rebuilds the swap chain buffers and the views onto them at a new size.
+        /// Must be called between frames, with nothing else holding the targets.
+        /// Returns 1 on success.
+        /// </summary>
+        DOOMS_ENGINE_GRAPHICS_API unsigned int ResizeSwapChainBuffers(const unsigned int width, const unsigned int height)
+        {
+            if (dx11::g_pSwapChain == nullptr || dx11::g_pd3dDevice == nullptr || width == 0 || height == 0)
+            {
+                return 0;
+            }
+
+            // Nothing may reference the buffers while they are resized.
+            dx11::g_pImmediateContext->OMSetRenderTargets(0, nullptr, nullptr);
+
+            if (dx11::BackBufferRenderTargetView != nullptr)
+            {
+                dx11::BackBufferRenderTargetView->Release();
+                dx11::BackBufferRenderTargetView = nullptr;
+            }
+            if (dx11::BackBufferDepthStencilView != nullptr)
+            {
+                dx11::BackBufferDepthStencilView->Release();
+                dx11::BackBufferDepthStencilView = nullptr;
+            }
+            if (dx11::g_pDepthStencil != nullptr)
+            {
+                dx11::g_pDepthStencil->Release();
+                dx11::g_pDepthStencil = nullptr;
+            }
+
+            // 0 for the buffer count and UNKNOWN for the format keep whatever the
+            // swap chain was created with.
+            HRESULT hr = dx11::g_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            ID3D11Texture2D* pBackBuffer = nullptr;
+            hr = dx11::g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            hr = dx11::g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &dx11::BackBufferRenderTargetView);
+            pBackBuffer->Release();
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            D3D11_TEXTURE2D_DESC descDepth = {};
+            descDepth.Width = width;
+            descDepth.Height = height;
+            descDepth.MipLevels = 1;
+            descDepth.ArraySize = 1;
+            descDepth.Format = dooms::graphics::dx11::ConvertTextureInternalFormat_To_DXGI_FORMAT(GraphicsAPI::TEXTURE_INTERNAL_FORMAT_DEPTH_COMPONENT24);
+            descDepth.SampleDesc.Count = 1;
+            descDepth.SampleDesc.Quality = 0;
+            descDepth.Usage = D3D11_USAGE_DEFAULT;
+            descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+            hr = dx11::g_pd3dDevice->CreateTexture2D(&descDepth, nullptr, &dx11::g_pDepthStencil);
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            D3D11_DEPTH_STENCIL_VIEW_DESC descDSV = {};
+            descDSV.Format = descDepth.Format;
+            descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+            descDSV.Texture2D.MipSlice = 0;
+            hr = dx11::g_pd3dDevice->CreateDepthStencilView(dx11::g_pDepthStencil, &descDSV, &dx11::BackBufferDepthStencilView);
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            dx11::g_pImmediateContext->OMSetRenderTargets(1, &dx11::BackBufferRenderTargetView, dx11::BackBufferDepthStencilView);
+
+            D3D11_VIEWPORT viewport = {};
+            viewport.TopLeftX = 0.0f;
+            viewport.TopLeftY = 0.0f;
+            viewport.Width = static_cast<FLOAT>(width);
+            viewport.Height = static_cast<FLOAT>(height);
+            viewport.MinDepth = 0.0f;
+            viewport.MaxDepth = 1.0f;
+            dx11::g_pImmediateContext->RSSetViewports(1, &viewport);
+
+            return 1;
+        }
 
         DOOMS_ENGINE_GRAPHICS_API void FlushCMDQueue()
 		{
