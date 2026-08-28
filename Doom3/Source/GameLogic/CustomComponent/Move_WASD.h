@@ -15,9 +15,13 @@ namespace dooms
 		D_PROPERTY()
 		FLOAT32 mRotationSpeed = 2.0f;
 
-		// Degrees of rotation per pixel of mouse movement while looking.
+		// Radians of rotation per pixel of mouse movement while looking.
+		//
+		// Radians, not degrees: Transform::Rotate builds a quaternion through
+		// EulerAngleToQuaternion, which feeds the values straight to cos and
+		// sin without converting. The default is about 0.2 degrees per pixel.
 		D_PROPERTY()
-		FLOAT32 mMouseLookSensitivity = 0.15f;
+		FLOAT32 mMouseLookSensitivity = 0.0035f;
 
 	protected:
 

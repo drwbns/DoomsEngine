@@ -75,6 +75,11 @@ void dooms::Move_WASD::UpdateComponent()
 			// Applied directly rather than through the normalise-and-scale path
 			// below: mouse movement already carries its own magnitude, and
 			// normalising would throw that away and make every flick identical.
+			//
+			// The result is in radians, which is what Transform::Rotate expects.
+			// Treating the sensitivity as degrees made a twenty pixel movement
+			// swing the view most of the way round, which read as the camera
+			// snapping rather than turning.
 			const math::Vector3 mouseRotation
 			{
 				-deltaY * mMouseLookSensitivity,
