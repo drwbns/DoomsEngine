@@ -75,22 +75,27 @@ void dooms::graphics::DebugDrawer::Draw()
 		}
 		if (container->IsSpecialColoredVertexDataEmpty() == false)
 		{
-			for (size_t index = 0; index < container->GetSpecialColoredPrimitiveCount(); index++)
+			// Already built by BufferVertexDataToGPU, which must agree with this
+			// loop on the order the vertices were written in.
+			container->BuildSpecialColorBatches();
+
+			for (const DebugPrimitiveContainer::SpecialColorBatch& colorBatch : container->GetSpecialColorBatches())
 			{
 				if (container->Is3DPrimitive() == false)
 				{
 					m2DMaterial->BindMaterial();
-					_2DUBOView->SetVector4((UINT64)0, container->GetSpecialColorData()[index]);
+					_2DUBOView->SetVector4((UINT64)0, colorBatch.mColor);
 				}
 				else
 				{
 					m3DMaterial->BindMaterial();
-					_3DUBOView->SetVector4((UINT64)0, container->GetSpecialColorData()[index]);
+					_3DUBOView->SetVector4((UINT64)0, colorBatch.mColor);
 				}
 
-				mDebugMesh.DrawArray(container->GetPrimitiveType(), alreadyDrawedVertexCount, container->GetVertexCountPerPrimitive());
+				const UINT32 vertexCount = colorBatch.mPrimitiveCount * container->GetVertexCountPerPrimitive();
+				mDebugMesh.DrawArray(container->GetPrimitiveType(), alreadyDrawedVertexCount, vertexCount);
 
-				alreadyDrawedVertexCount += container->GetVertexCountPerPrimitive();
+				alreadyDrawedVertexCount += vertexCount;
 			}
 
 		}
@@ -352,13 +357,18 @@ void dooms::graphics::DebugDrawer::BufferVertexDataToGPU()
 
 		if (container->IsSpecialColoredVertexDataEmpty() == false)
 		{
+			// Upload the primitives grouped by colour rather than in insertion
+			// order, so Draw can issue one call per colour instead of one per
+			// primitive.
+			container->BuildSpecialColorBatches();
+
 			const size_t primitiveCount = container->GetSpecialColoredPrimitiveCount();
 
 			D_ASSERT(MAX_DEBUG_VERTEX_COUNT >= alreadyDrawedVertexCount + primitiveCount * container->GetVertexCountPerPrimitive());
 			const UINT64 dataSize = primitiveCount * container->GetComponentCountPerPrimitive() * container->GetComponentSize();
 			const UINT64 offset = offsetComponentCount * sizeof(FLOAT32);
 
-			std::memcpy(mapppedAddress + offset, container->GetSpecialColoredVertexData(), dataSize);
+			std::memcpy(mapppedAddress + offset, container->GetBatchedSpecialColoredVertexData(), dataSize);
 
 			offsetComponentCount += primitiveCount * container->GetComponentCountPerPrimitive();
 			alreadyDrawedVertexCount += primitiveCount * container->GetVertexCountPerPrimitive();
