@@ -17,6 +17,7 @@
 
 #include <IO/UserInput_Server.h>
 #include <Graphics/GraphicsAPI/graphicsAPISetting.h>
+#include <Graphics/graphicsSetting.h>
 
 bool dooms::ui::EngineGUIServer::DestroyImgui()
 {
@@ -199,6 +200,7 @@ namespace
             // Performance figures together on the right.
             ImGui::DockBuilderDockWindow("DrawCall", right);
             ImGui::DockBuilderDockWindow("Display", right);
+            ImGui::DockBuilderDockWindow("Visualisation", right);
             ImGui::DockBuilderDockWindow("Profiler", right);
             ImGui::DockBuilderDockWindow("Thread Profiler ( QueryThreadCycleTime ( /s ) )", right);
 
@@ -229,6 +231,75 @@ namespace
 
         const unsigned int bIsFullscreen = GraphicsAPI::IsBorderlessFullscreen();
         GraphicsAPI::SetBorderlessFullscreen(bIsFullscreen != 0 ? 0u : 1u);
+    }
+
+    // A checkbox that explains itself on hover. These were only reachable
+    // through a demo component's properties before, where nothing said what any
+    // of them did. The description is a tooltip rather than inline text because
+    // the panel docks narrow, and inline descriptions truncate to uselessness.
+    void VisualisationToggle(const char* const label, const char* const description, bool& value)
+    {
+        ImGui::Checkbox(label, &value);
+
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+        {
+            ImGui::SetTooltip("%s", description);
+        }
+    }
+
+    void RenderVisualisationPanel()
+    {
+        using namespace dooms::graphics;
+
+        if (dooms::ui::enginePanel::BeginPanel("Visualisation"))
+        {
+            VisualisationToggle(
+                "Debug drawing",
+                "master switch for everything below",
+                graphicsSetting::IsDrawDebuggersEnabled);
+
+            ImGui::SeparatorText("Occlusion culling");
+
+            VisualisationToggle(
+                "Occluder bounds",
+                "boxes of the objects chosen to occlude",
+                graphicsSetting::IsDrawMaskedOcclusionCullingOcculderBoundingBoxDebugger);
+
+            VisualisationToggle(
+                "Binned triangles",
+                "per tile, how much geometry was rasterised",
+                graphicsSetting::IsDrawMaskedOcclusionCullingBinTriangleStageDebugger);
+
+            VisualisationToggle(
+                "Tile coverage",
+                "per tile, which pixels the occluders covered",
+                graphicsSetting::IsDrawMaskedOcclusionCullingTileCoverageMaskDebugger);
+
+            VisualisationToggle(
+                "Tile depth",
+                "per tile, the depth occludees are tested against",
+                graphicsSetting::IsDrawMaskedOcclusionCullingTileL0MaxDepthValueDebugger);
+
+            ImGui::SeparatorText("Scene");
+
+            VisualisationToggle(
+                "Overdraw",
+                "how many times each pixel was shaded",
+                graphicsSetting::IsOverDrawVisualizationEnabled);
+
+            VisualisationToggle(
+                "Renderer bounds",
+                "bounding box of every renderer",
+                graphicsSetting::DrawRenderingBoundingBox);
+
+            ImGui::SeparatorText("Rendering");
+
+            VisualisationToggle(
+                "Sort front to back",
+                "off makes occlusion culling look worse than it is",
+                graphicsSetting::IsSortObjectFrontToBack);
+        }
+        dooms::ui::enginePanel::EndPanel();
     }
 
     void RenderDisplayPanel()
@@ -300,6 +371,7 @@ void dooms::ui::EngineGUIServer::Render()
         }
      
         RenderDisplayPanel();
+        RenderVisualisationPanel();
 
         for(EngineGUIModule* module : mEngineGUIModules)
         {
@@ -440,6 +512,7 @@ void dooms::ui::EngineGUIServer::Update()
     {
         "DrawCall",
         "Display",
+        "Visualisation",
         "Profiler",
         "Thread Profiler ( QueryThreadCycleTime ( /s ) )",
         "Log",
