@@ -67,6 +67,25 @@ void dooms::graphics::OverDrawVisualization::Initialize()
 	OverDrawVisualizationPIP->AddToRootObjectList();
 	OverDrawVisualizationPIP->bmIsDrawOnScreen = false;
 
+	// The geometry pass accumulates a layer count in the red channel, which on
+	// its own presents as a black-to-red wash with no cold end. This material
+	// turns that count into the same cold-to-hot ramp the occlusion heatmap
+	// uses, so the two visualisations read the same way.
+	dooms::asset::ShaderAsset* const overDrawVisualizationPresentShader
+		= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationPresentShader.glsl");
+	if (IsValid(overDrawVisualizationPresentShader))
+	{
+		mOverDrawVisualizationPresentMaterial = overDrawVisualizationPresentShader->CreateMatrialWithThisShaderAsset();
+		mOverDrawVisualizationPresentMaterial->AddToRootObjectList();
+		OverDrawVisualizationPIP->SetMaterial(mOverDrawVisualizationPresentMaterial);
+	}
+	else
+	{
+		// Missing asset is survivable: the PIP keeps its default material and
+		// shows the raw accumulation instead of the ramp.
+		D_ASSERT(false);
+	}
+
 	bmIsOverDrawVisualizationInitialized = true;
 }
 
@@ -88,6 +107,35 @@ const char* dooms::graphics::OverDrawVisualization::GetRenderingDebuggerModuleNa
 }
 
 
+void dooms::graphics::OverDrawVisualization::BeginOverDrawPass()
+{
+	SetOverDrawVisualizationRenderingState(true);
+
+	// Every layer counts, including the ones a depth test would have thrown
+	// away. Overdraw is the number of times a pixel was shaded, not the number
+	// of times it was shaded visibly.
+	GraphicsAPI::SetIsDepthTestEnabled(false);
+	GraphicsAPI::SetDepthMask(false);
+}
+
+void dooms::graphics::OverDrawVisualization::EndOverDrawPass()
+{
+	GraphicsAPI::SetIsDepthTestEnabled(true);
+	GraphicsAPI::SetDepthMask(true);
+
+	SetOverDrawVisualizationRenderingState(false);
+
+	ShowOverDrawVisualizationPIP(true);
+}
+
+void dooms::graphics::OverDrawVisualization::HideOverDrawVisualization()
+{
+	if (bmIsOverDrawVisualizationInitialized == true)
+	{
+		ShowOverDrawVisualizationPIP(false);
+	}
+}
+
 void dooms::graphics::OverDrawVisualization::SetOverDrawVisualizationRenderingState(const bool isSet)
 {
 	if (bmIsOverDrawVisualizationInitialized == false)
@@ -105,6 +153,10 @@ void dooms::graphics::OverDrawVisualization::SetOverDrawVisualizationRenderingSt
 
 		mOverDrawVisualizationFrameBuffer->ClearColorTexture(0, 0.0f, 0.0f, 0.0f, 1.0f);
 		mOverDrawVisualizationFrameBuffer->ClrearDepthTexture(GraphicsAPI::DEFAULT_MAX_DEPTH_VALUE);
+
+		// Without this the pass accumulates into whichever frame buffer happened
+		// to be bound, which is the back buffer during a normal frame.
+		mOverDrawVisualizationFrameBuffer->BindFrameBuffer();
 	}
 	else
 	{

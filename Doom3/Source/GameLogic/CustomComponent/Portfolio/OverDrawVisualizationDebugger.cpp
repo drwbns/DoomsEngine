@@ -29,9 +29,7 @@ void dooms::OverDrawVisualizationDebugger::UpdateComponent()
 
 	}
 
-	if (dooms::userinput::UserInput_Server::GetKeyUp(dooms::input::GraphicsAPIInput::eKEY_CODE::KEY_F6))
-	{
-		graphics::graphicsSetting::IsOverDrawVisualizationEnabled = !(graphics::graphicsSetting::IsOverDrawVisualizationEnabled);
-
-	}
+	// F6 used to toggle overdraw from here. It now belongs to the visualisation
+	// cycle in EngineGUIServer, which owns every one of these toggles, so having
+	// it here as well would fight with that.
 }

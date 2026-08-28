@@ -8,6 +8,7 @@
 #include <Rendering/Renderer/Renderer.h>
 #include "DeferredRenderingPipeLineCamera.h"
 #include <Graphics/graphicsSetting.h>
+#include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
 
 dooms::graphics::DeferredRenderingPipeLine::DeferredRenderingPipeLine
 (
@@ -115,14 +116,37 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		DrawRenderers(targetCamera, cameraIndex);
 		D_END_PROFILING(RenderObject);
 	}
-	
+
+	// Overdraw gets its own pass over the scene. It forces every renderer onto a
+	// material that adds a fixed amount per fragment, which cannot be shared
+	// with the pass that fills the g-buffer, and it needs the depth test off so
+	// that hidden layers still count.
+	if (targetCamera->IsMainCamera() == true)
+	{
+		dooms::graphics::OverDrawVisualization* const overDrawVisualization = dooms::graphics::OverDrawVisualization::GetSingleton();
+		if (overDrawVisualization != nullptr)
+		{
+			if (dooms::graphics::graphicsSetting::IsOverDrawVisualizationEnabled == true)
+			{
+				D_START_PROFILING(OverDrawVisualization, dooms::profiler::eProfileLayers::Rendering);
+				overDrawVisualization->BeginOverDrawPass();
+				DrawBatchedRenderers();
+				DrawRenderers(targetCamera, cameraIndex);
+				overDrawVisualization->EndOverDrawPass();
+				D_END_PROFILING(OverDrawVisualization);
+			}
+			else
+			{
+				overDrawVisualization->HideOverDrawVisualization();
+			}
+		}
+	}
+
 	FrameBuffer::StaticBindBackFrameBuffer();
 	
 	if (targetCamera->IsMainCamera() == true)
 	{
 		//Only Main Camera can draw to screen buffer
-		mGraphicsServer.mPIPManager.DrawPIPs();
-
 		dooms::graphics::DeferredRenderingPipeLineCamera* const deferredRenderingPipeLineCamera = CastTo<graphics::DeferredRenderingPipeLineCamera*>(targetCamera->GetGraphicsPipeLineCamera());
 		D_ASSERT(IsValid(deferredRenderingPipeLineCamera));
 		if (IsValid(deferredRenderingPipeLineCamera))
@@ -131,6 +155,11 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 			mDeferredRenderingDrawer.DrawDeferredRenderingQuadDrawer();
 			deferredRenderingPipeLineCamera->mDeferredRenderingFrameBuffer.UnBindGBufferTextures();
 		}
+
+		// After the lighting resolve, not before it. The resolve covers the
+		// whole back buffer, so anything drawn ahead of it was painted over --
+		// which meant a picture-in-picture could never actually be seen.
+		mGraphicsServer.mPIPManager.DrawPIPs();
 
 		mRenderingDebugger.CameraRender(targetCamera);
 	}

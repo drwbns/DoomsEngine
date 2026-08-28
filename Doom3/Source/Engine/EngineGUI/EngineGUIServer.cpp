@@ -247,12 +247,54 @@ namespace
         }
     }
 
+    // The visualisations F6 steps through, in the order it steps through them.
+    //
+    // One at a time and nothing else on, because most of these cover the screen
+    // and two at once shows you neither. The panel below still allows any
+    // combination for when that is what you want.
+    struct VisualisationMode
+    {
+        const char* mName;
+        bool* mFlag;
+    };
+
+    const VisualisationMode gVisualisationCycle[] =
+    {
+        { "Off",              nullptr },
+        { "Occluder bounds",  &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingOcculderBoundingBoxDebugger },
+        { "Binned triangles", &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingBinTriangleStageDebugger },
+        { "Tile coverage",    &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingTileCoverageMaskDebugger },
+        { "Tile depth",       &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingTileL0MaxDepthValueDebugger },
+        { "Overdraw",         &dooms::graphics::graphicsSetting::IsOverDrawVisualizationEnabled },
+        { "Renderer bounds",  &dooms::graphics::graphicsSetting::DrawRenderingBoundingBox }
+    };
+
+    constexpr INT32 gVisualisationCycleCount
+        = static_cast<INT32>(sizeof(gVisualisationCycle) / sizeof(gVisualisationCycle[0]));
+
+    INT32 gVisualisationCycleIndex = 0;
+
+    void ApplyVisualisationCycleIndex(const INT32 index)
+    {
+        for (INT32 i = 0; i < gVisualisationCycleCount; i++)
+        {
+            if (gVisualisationCycle[i].mFlag != nullptr)
+            {
+                *(gVisualisationCycle[i].mFlag) = (i == index);
+            }
+        }
+
+        gVisualisationCycleIndex = index;
+    }
+
     void RenderVisualisationPanel()
     {
         using namespace dooms::graphics;
 
         if (dooms::ui::enginePanel::BeginPanel("Visualisation"))
         {
+            ImGui::TextDisabled("F6 cycles: %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
+
             VisualisationToggle(
                 "Debug drawing",
                 "master switch for everything below",
@@ -552,6 +594,14 @@ void dooms::ui::EngineGUIServer::Update()
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F11))
     {
         ToggleBorderlessFullscreen();
+    }
+
+    // F6 steps through the visualisations one at a time, starting from off.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F6))
+    {
+        ApplyVisualisationCycleIndex((gVisualisationCycleIndex + 1) % gVisualisationCycleCount);
+
+        D_RELEASE_LOG(eLogType::D_LOG, "Visualisation : %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
     }
 
     // F4 puts the panels back into the default arrangement.

@@ -49,8 +49,19 @@ void main()
 
 layout (location = 0) out vec4 oOverdrawIntensity;
 
+// Added to the target once per fragment, with additive blending on, so the red
+// channel ends up holding the layer count scaled by this.
+//
+// It sets the ceiling: the target saturates at 1.0, so this is 1/50th and
+// counts up to 50 overlapping layers. It was 0.1, which ran out at 10 and made
+// any moderately deep pixel indistinguishable from a pathological one.
+//
+// OverDrawVisualizationPresentShader.glsl divides by this to recover the count,
+// so the two values must be changed together.
+const float OVERDRAW_INTENSITY_PER_FRAGMENT = 0.02;
+
 void main()
 {
-	oOverdrawIntensity = vec4(0.1, 0.0, 0.0, 1.0);
+	oOverdrawIntensity = vec4(OVERDRAW_INTENSITY_PER_FRAGMENT, 0.0, 0.0, 1.0);
 }
 //@end

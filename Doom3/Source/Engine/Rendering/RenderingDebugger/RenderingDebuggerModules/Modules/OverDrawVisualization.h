@@ -27,6 +27,7 @@ namespace dooms
 
 			bool bmIsOverDrawVisualizationInitialized{ false };
 			dooms::graphics::Material* mOverDrawVisualizationObjectDrawMaterial{ nullptr };
+			dooms::graphics::Material* mOverDrawVisualizationPresentMaterial{ nullptr };
 			dooms::graphics::FrameBuffer* mOverDrawVisualizationFrameBuffer{ nullptr };
 			dooms::graphics::PicktureInPickture* OverDrawVisualizationPIP{ nullptr };
 
@@ -36,6 +37,30 @@ namespace dooms
 		public:
 
 			void Initialize() override;
+
+			/// <summary>
+			/// Redirects drawing into the overdraw buffer, with every renderer
+			/// forced onto a material that adds a fixed amount per fragment.
+			/// Whatever the caller draws between Begin and End is counted.
+			///
+			/// Depth testing and depth writes are off for the pass: the measure
+			/// is how many times a pixel gets shaded, so layers a depth test
+			/// would have rejected still have to count. That makes this a second
+			/// pass over the scene rather than something that can share the
+			/// g-buffer pass.
+			/// </summary>
+			void BeginOverDrawPass();
+
+			/// <summary>
+			/// Restores the previous render state and puts the result on screen.
+			/// </summary>
+			void EndOverDrawPass();
+
+			/// <summary>
+			/// Takes the result back off screen. Safe before anything has been
+			/// initialised, which is the usual case since overdraw is off.
+			/// </summary>
+			void HideOverDrawVisualization();
 
 			/// <summary>
 			/// Drops the frame buffer and its picture-in-picture view after the
