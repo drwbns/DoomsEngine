@@ -105,6 +105,24 @@ void dooms::userinput::UserInput_Server::UpdateKeyStates()
 		UserInput_Server::mKeyState[upKey - static_cast<INT32>(FIRST_KEY_CODE)] = eKeyState::NONE;
 	}
 
+	// Retire last frame's PRESS_DOWN so GetKeyDown means "went down this frame".
+	//
+	// PRESS_DOWN used to advance only when the next key *event* arrived, and
+	// auto-repeat does not begin for roughly half a second, so holding a key
+	// briefly left GetKeyDown true for every frame in between and callers
+	// fired repeatedly - a toggle bound to a key would flicker rather than
+	// switch once.
+	//
+	// This runs before PollEvents() below, so a press arriving this frame is
+	// still seen by everything that reads input afterwards.
+	for (eKeyState& keyState : UserInput_Server::mKeyState)
+	{
+		if (keyState == eKeyState::PRESS_DOWN)
+		{
+			keyState = eKeyState::PRESSING;
+		}
+	}
+
 	/*
 	for (auto downKey : UserInput_Server::mDownKeys)
 	{

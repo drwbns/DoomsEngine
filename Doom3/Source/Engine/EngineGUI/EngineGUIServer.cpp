@@ -39,6 +39,9 @@ namespace
     // Whether the last BeginPanel actually opened a window, so EndPanel knows
     // if it owes ImGui a matching End().
     bool gPanelWindowOpened = false;
+
+    // Set by F4, cleared once the dockspace has rebuilt its layout.
+    bool gDockLayoutResetRequested = false;
 }
 
 namespace dooms
@@ -75,6 +78,15 @@ namespace dooms
             void SetOverlayAlpha(const FLOAT32 alpha)
             {
                 gOverlayAlpha = (alpha < 0.0f) ? 0.0f : ((alpha > 1.0f) ? 1.0f : alpha);
+            }
+
+            void RequestDockLayoutReset() { gDockLayoutResetRequested = true; }
+
+            bool ConsumeDockLayoutResetRequest()
+            {
+                const bool wasRequested = gDockLayoutResetRequested;
+                gDockLayoutResetRequested = false;
+                return wasRequested;
             }
 
             bool BeginPanel(const char* const panelName)
@@ -164,20 +176,29 @@ namespace
         // Lay the panels out once, when the dockspace has no layout yet. A
         // layout restored from imgui.ini leaves the node populated, so an
         // arrangement the user has set up themselves is never overwritten.
-        if (ImGui::DockBuilderGetNode(dockSpaceID) == nullptr)
+        const bool bIsResetRequested = dooms::ui::enginePanel::ConsumeDockLayoutResetRequest();
+
+        if (bIsResetRequested || ImGui::DockBuilderGetNode(dockSpaceID) == nullptr)
         {
+            // Clear any arrangement first, otherwise the panels stay wherever
+            // they were dragged and the default split has no effect.
+            ImGui::DockBuilderRemoveNode(dockSpaceID);
             ImGui::DockBuilderAddNode(dockSpaceID, ImGuiDockNodeFlags_DockSpace);
             ImGui::DockBuilderSetNodeSize(dockSpaceID, viewport->WorkSize);
 
             // Keep the middle free for the scene, and put panels around it.
             ImGuiID centre = dockSpaceID;
-            const ImGuiID left = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Left, 0.22f, nullptr, &centre);
+            const ImGuiID left = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Left, 0.24f, nullptr, &centre);
+            const ImGuiID right = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Right, 0.26f, nullptr, &centre);
             const ImGuiID bottom = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Down, 0.28f, nullptr, &centre);
 
-            // Performance figures together, on the left.
-            ImGui::DockBuilderDockWindow("DrawCall", left);
-            ImGui::DockBuilderDockWindow("Profiler", left);
-            ImGui::DockBuilderDockWindow("Thread Profiler ( QueryThreadCycleTime ( /s ) )", left);
+            // Scene contents on the left, the way an editor usually arranges it.
+            ImGui::DockBuilderDockWindow("Entities in scene", left);
+
+            // Performance figures together on the right.
+            ImGui::DockBuilderDockWindow("DrawCall", right);
+            ImGui::DockBuilderDockWindow("Profiler", right);
+            ImGui::DockBuilderDockWindow("Thread Profiler ( QueryThreadCycleTime ( /s ) )", right);
 
             // Log and the culling debuggers share the bottom as tabs.
             ImGui::DockBuilderDockWindow("Log", bottom);
@@ -386,6 +407,13 @@ void dooms::ui::EngineGUIServer::Update()
             (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::FocusedOverlay)
                 ? eEngineGUIDisplayMode::All
                 : eEngineGUIDisplayMode::FocusedOverlay);
+    }
+
+    // F4 puts the panels back into the default arrangement.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
+    {
+        enginePanel::SetDisplayMode(eEngineGUIDisplayMode::All);
+        enginePanel::RequestDockLayoutReset();
     }
 
     // F3 steps through the panels, switching to the overlay if not already there.

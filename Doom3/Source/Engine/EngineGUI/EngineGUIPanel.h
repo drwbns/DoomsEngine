@@ -35,6 +35,13 @@ namespace dooms
 			FLOAT32 GetOverlayAlpha();
 			void SetOverlayAlpha(const FLOAT32 alpha);
 
+			// Asks for the docked arrangement to be rebuilt from the default on
+			// the next frame, discarding whatever the panels were dragged into.
+			void RequestDockLayoutReset();
+
+			// True once per request, for the dockspace to act on.
+			bool ConsumeDockLayoutResetRequest();
+
 			/// <summary>
 			/// Opens a panel window on behalf of a GUI module, applying whatever
 			/// the current display mode requires.
