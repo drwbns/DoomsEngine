@@ -537,11 +537,6 @@ void dooms::ui::EngineGUIServer::Update()
             // the interface unrecoverable.
             bmIsEngineGUIAvaliable = true;
         }
-
-        // The interface and mouse look want the cursor for opposite reasons, so
-        // they are opposite sides of the same toggle: panels up means a free
-        // cursor, panels hidden means look around.
-        dooms::userinput::UserInput_Server::SetIsMouseLookEnabled(bShouldShow == false);
     }
 
     // F2 swaps between the docked view and a single focused overlay.
@@ -581,6 +576,24 @@ void dooms::ui::EngineGUIServer::Update()
         }
 
         enginePanel::SetFocusedPanelName(focusablePanels[focusedPanelIndex]);
+    }
+
+    // The interface and mouse look want the cursor for opposite reasons: panels
+    // up means a free cursor, panels hidden means look around.
+    //
+    // Derived from the display mode here rather than set inside the F1 branch,
+    // because F1 is not the only key that changes that mode. Going out through
+    // F1 and back in through F2, F3 or F4 used to leave the cursor hidden and
+    // captured with the panels plainly visible, and nothing put it back.
+    {
+        const bool bShouldMouseLook = (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::Hidden);
+
+        // Only on a change: the setter reaches through to the graphics DLL to
+        // switch the mouse into relative mode.
+        if (bShouldMouseLook != dooms::userinput::UserInput_Server::GetIsMouseLookEnabled())
+        {
+            dooms::userinput::UserInput_Server::SetIsMouseLookEnabled(bShouldMouseLook);
+        }
     }
 }
 

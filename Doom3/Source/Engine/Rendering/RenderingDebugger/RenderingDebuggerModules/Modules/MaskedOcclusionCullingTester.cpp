@@ -255,12 +255,18 @@ void dooms::graphics::MaskedOcclusionCullingTester::DebugBinnedTriangles
 		{
 			const size_t binnedTriangleCount = depthBuffer->GetTile(y, x)->mBinnedTriangleCount;
 
-			// A tile nothing was binned into is left black rather than given the
-			// cold end of the ramp, so that "no occluder geometry here at all"
-			// stays distinct from "a little".
-			const math::Vector4 tileColor = (binnedTriangleCount == 0)
-				? math::Vector4{ 0.0f, 0.0f, 0.0f, 1.0f }
-				: HeatmapColor((float)binnedTriangleCount / (float)BIN_TRIANGLE_CAPACITY_PER_TILE);
+			// Tiles nothing was binned into are skipped rather than filled in.
+			//
+			// They used to be drawn black, which is opaque, so the debugger
+			// blacked out the whole frame apart from thin gaps between the tile
+			// boxes and you could not tell what the heat was sitting on. Leaving
+			// them out puts the heat over the scene instead, which is the point.
+			if (binnedTriangleCount == 0)
+			{
+				continue;
+			}
+
+			const math::Vector4 tileColor = HeatmapColor((float)binnedTriangleCount / (float)BIN_TRIANGLE_CAPACITY_PER_TILE);
 
 			//draw -1 ~ 1
 			dooms::graphics::DebugDrawer::GetSingleton()->DebugDraw2DBox
