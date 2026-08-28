@@ -77,7 +77,7 @@ void dooms::Move_WASD::UpdateComponent()
 			// normalising would throw that away and make every flick identical.
 			const math::Vector3 mouseRotation
 			{
-				deltaY * mMouseLookSensitivity,
+				-deltaY * mMouseLookSensitivity,
 				-deltaX * mMouseLookSensitivity,
 				0.0f
 			};
