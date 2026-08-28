@@ -464,6 +464,11 @@ void dooms::ui::EngineGUIServer::Update()
             // the interface unrecoverable.
             bmIsEngineGUIAvaliable = true;
         }
+
+        // The interface and mouse look want the cursor for opposite reasons, so
+        // they are opposite sides of the same toggle: panels up means a free
+        // cursor, panels hidden means look around.
+        dooms::userinput::UserInput_Server::SetIsMouseLookEnabled(bShouldShow == false);
     }
 
     // F2 swaps between the docked view and a single focused overlay.

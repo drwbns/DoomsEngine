@@ -62,10 +62,10 @@ void dooms::Move_WASD::UpdateComponent()
 	math::Vector3 rotation{ 0.0f, 0.0f, 0.0f };
 	bool isRotated = false;
 
-	// Mouse look, while the right button is held. Gating it on a button keeps
-	// the cursor free for the interface the rest of the time, which matters
-	// when the whole point of the tool is reading panels while flying around.
-	if (UserInput_Server::GetMouseButtonPressing(dooms::input::GraphicsAPIInput::eMoustInput::MOUSE_BUTTON_RIGHT))
+	// Mouse look, active whenever the interface is hidden. F1 switches between
+	// the two: panels up gives a free cursor for reading them, panels hidden
+	// captures it for looking around.
+	if (UserInput_Server::GetIsMouseLookEnabled())
 	{
 		const FLOAT32 deltaX = UserInput_Server::GetDeltaMouseScreenPositionX();
 		const FLOAT32 deltaY = UserInput_Server::GetDeltaMouseScreenPositionY();

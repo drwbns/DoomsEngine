@@ -249,6 +249,17 @@ void UserInput_Server::SetIsCursorVisible(bool isVisible) noexcept
 	UserInput_Server::GetSingleton()->UpdateCursorMode();
 }
 
+void UserInput_Server::SetIsMouseLookEnabled(bool isEnabled) noexcept
+{
+	UserInput_Server::bIsMouseLookEnabled = isEnabled;
+
+	// Hidden and locked while looking, so the pointer cannot drift off the
+	// window mid-turn; shown and free otherwise, for using the panels.
+	UserInput_Server::GetSingleton()->IsCursorVisible = (isEnabled == false);
+	UserInput_Server::GetSingleton()->IsCursorLockedInScreen = isEnabled;
+	UserInput_Server::GetSingleton()->UpdateCursorMode();
+}
+
 void UserInput_Server::SetIsCursorLockedInScreen(bool isLocked) noexcept
 {
 	UserInput_Server::GetSingleton()->IsCursorLockedInScreen = isLocked;

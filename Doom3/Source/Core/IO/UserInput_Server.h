@@ -231,7 +231,25 @@ namespace dooms
 			static void SetIsCursorVisible(bool isVisible) noexcept;
 			static void SetIsCursorLockedInScreen(bool isLocked) noexcept;
 
+			/// <summary>
+			/// While enabled the cursor is hidden and locked to the window, and
+			/// camera controls steer with the mouse. Lives here rather than in
+			/// the GUI so game logic can read it without depending on the GUI.
+			/// </summary>
+			static void SetIsMouseLookEnabled(bool isEnabled) noexcept;
+
+			NO_DISCARD FORCE_INLINE static bool GetIsMouseLookEnabled() noexcept
+			{
+				return UserInput_Server::bIsMouseLookEnabled;
+			}
+
 			
+		private:
+
+			static inline bool bIsMouseLookEnabled{ false };
+
+		public:
+
 			static void CursorEnterCallback(bool isEntered);
 			static void CursorPosition_Callback(FLOAT64 xpos, FLOAT64 ypos);
 			static void Scroll_Callback(FLOAT64 xoffset, FLOAT64 yoffset);
