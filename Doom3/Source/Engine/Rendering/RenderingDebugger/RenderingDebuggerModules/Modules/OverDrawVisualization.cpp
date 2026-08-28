@@ -49,6 +49,18 @@ void dooms::graphics::OverDrawVisualization::OnResolutionChanged()
 
 void dooms::graphics::OverDrawVisualization::Initialize()
 {
+	// Deliberately empty. The module is always created, but its frame buffer is
+	// screen sized and overdraw is off almost all of the time, so the resources
+	// are built on first use by EnsureResourcesCreated instead.
+}
+
+void dooms::graphics::OverDrawVisualization::EnsureResourcesCreated()
+{
+	if (bmIsOverDrawVisualizationInitialized == true)
+	{
+		return;
+	}
+
 	dooms::asset::ShaderAsset* overDrawVisualizationShader = dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationShader.glsl");
 	mOverDrawVisualizationObjectDrawMaterial = overDrawVisualizationShader->CreateMatrialWithThisShaderAsset();
 	mOverDrawVisualizationObjectDrawMaterial->AddToRootObjectList();
@@ -138,10 +150,7 @@ void dooms::graphics::OverDrawVisualization::HideOverDrawVisualization()
 
 void dooms::graphics::OverDrawVisualization::SetOverDrawVisualizationRenderingState(const bool isSet)
 {
-	if (bmIsOverDrawVisualizationInitialized == false)
-	{
-		Initialize();
-	}
+	EnsureResourcesCreated();
 
 	if (isSet == true)
 	{

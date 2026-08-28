@@ -34,6 +34,12 @@ namespace dooms
 			void SetOverDrawVisualizationRenderingState(const bool isSet);
 			void ShowOverDrawVisualizationPIP(const bool isPIPDrawed);
 
+			/// <summary>
+			/// Builds the frame buffer, materials and picture-in-picture on first
+			/// use, and again after a resize has dropped them. Cheap to call.
+			/// </summary>
+			void EnsureResourcesCreated();
+
 		public:
 
 			void Initialize() override;

@@ -21,13 +21,18 @@ std::vector<dooms::graphics::RenderingDebuggerModule*> dooms::graphics::renderin
 		dooms::CreateDObject<MaskedOcclusionCullingTester>()
 	);
 
-	if (dooms::ConfigData::GetSingleton()->GetConfigData().GetValue<bool>("Graphics", "OVERDRAW_VISUALIZATION"))
-	{
-		renderingDebuggerModules.emplace_back
-		(
-			dooms::CreateDObject<OverDrawVisualization>()
-		);
-	}
+	// Always created, unlike the other modules which used to be gated on
+	// OVERDRAW_VISUALIZATION being set at startup. That gate meant the module
+	// did not exist at all in a default build, so the runtime toggle had
+	// nothing to talk to and silently did nothing.
+	//
+	// It costs nothing to have around: it holds no resources until overdraw is
+	// actually switched on. OVERDRAW_VISUALIZATION now seeds the toggle instead,
+	// which is what the other debugger keys already do.
+	renderingDebuggerModules.emplace_back
+	(
+		dooms::CreateDObject<OverDrawVisualization>()
+	);
 
 	renderingDebuggerModules.emplace_back
 	(
