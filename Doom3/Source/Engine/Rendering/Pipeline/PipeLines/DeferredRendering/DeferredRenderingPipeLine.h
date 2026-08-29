@@ -82,12 +82,29 @@ namespace dooms
 			UINT32 mHiZReadbackWidth{ 0 };
 			UINT32 mHiZReadbackHeight{ 0 };
 			bool bmIsHiZReadbackPending{ false };
+
+			// The last level that arrived, kept so the occlusion test can read it
+			// without mapping again.
+			std::vector<FLOAT32> mHiZReadbackData{};
+			bool bmIsHiZReadbackDataValid{ false };
 			UINT64 mHiZFrameCounter{ 0 };
 
 			/// <summary>
 			/// Takes last frame's copy if it has arrived, and queues this frame's.
 			/// </summary>
 			void ReadBackHiZLevel();
+
+			/// <summary>
+			/// Reports what a Hi-Z occlusion test would decide, without acting on
+			/// it.
+			///
+			/// Measuring before culling because the two inputs are in depth
+			/// spaces that may not match: the entity blocks carry a min NDC z
+			/// written by PreCulling, and the pyramid holds whatever the depth
+			/// buffer holds. Guessing wrong culls things that are visible, which
+			/// is the failure that is hard to notice and easy to ship.
+			/// </summary>
+			void MeasureHiZOcclusion(const size_t cameraIndex);
 
 			/// <summary>
 			/// Draws a quad covering the target with whatever material is bound.

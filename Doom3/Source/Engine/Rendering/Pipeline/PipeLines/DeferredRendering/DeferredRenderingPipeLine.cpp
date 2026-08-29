@@ -17,6 +17,9 @@
 #include <Asset/TextureAsset.h>
 #include <Rendering/Buffer/MeshHelper.h>
 #include <Rendering/Buffer/UniformBufferObject/UniformBufferObjectView.h>
+#include <Rendering/Culling/EveryCulling/DataType/EntityBlock.h>
+#include <Rendering/Culling/EveryCulling/CullingModule/MaskedSWOcclusionCulling/MaskedSWOcclusionCulling.h>
+#include <cstring>
 
 dooms::graphics::DeferredRenderingPipeLine::DeferredRenderingPipeLine
 (
@@ -257,6 +260,7 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 	FrameBuffer::StaticBindBackFrameBuffer();
 
 	ReadBackHiZLevel();
+	MeasureHiZOcclusion(0);
 }
 
 void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
@@ -279,8 +283,11 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 		// A coarse level, so the copy is small and the map is cheap. Sixteen
 		// texels across is enough to see that real values are coming through
 		// while staying far away from the cost of reading back a whole screen.
+		// Aimed at roughly sixty texels across: fine enough that an object's
+		// screen rectangle covers a useful number of cells, coarse enough that
+		// the copy and the scan over it stay cheap.
 		mHiZReadbackLevel = 0;
-		while ((mHiZReadbackLevel + 1 < mHiZLevelCount) && (mHiZTexture->GetTextureWidth(mHiZReadbackLevel) > 16))
+		while ((mHiZReadbackLevel + 1 < mHiZLevelCount) && (mHiZTexture->GetTextureWidth(mHiZReadbackLevel) > 64))
 		{
 			mHiZReadbackLevel++;
 		}
@@ -325,6 +332,22 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 				}
 			}
 
+			// Kept, so the occlusion test can read it without mapping again.
+			mHiZReadbackData.resize(static_cast<size_t>(mHiZReadbackWidth) * mHiZReadbackHeight);
+
+			for (UINT32 rowIndex = 0; rowIndex < mHiZReadbackHeight; rowIndex++)
+			{
+				const FLOAT32* const row = reinterpret_cast<const FLOAT32*>(
+					reinterpret_cast<const char*>(mappedData) + static_cast<size_t>(rowIndex) * rowPitchInBytes);
+
+				std::memcpy(
+					mHiZReadbackData.data() + static_cast<size_t>(rowIndex) * mHiZReadbackWidth,
+					row,
+					static_cast<size_t>(mHiZReadbackWidth) * sizeof(FLOAT32));
+			}
+
+			bmIsHiZReadbackDataValid = true;
+
 			GraphicsAPI::UnMapTexture2D(mHiZReadbackTexture);
 			bmIsHiZReadbackPending = false;
 
@@ -348,6 +371,119 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 	}
 
 	mHiZFrameCounter++;
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_t cameraIndex)
+{
+	if (bmIsHiZReadbackDataValid == false || mHiZReadbackData.empty())
+	{
+		return;
+	}
+
+	culling::EveryCulling* const cullingSystem = mRenderingCullingManager.mCullingSystem.get();
+	if (cullingSystem == nullptr)
+	{
+		return;
+	}
+
+	// The screen space bounds PreCulling writes are in the culling system's
+	// resolution, which is the window. The pyramid is the g-buffer, which is
+	// not. Everything is taken to normalised coordinates rather than assuming
+	// the two agree.
+	const culling::SWDepthBuffer& swDepthBuffer = cullingSystem->mMaskedSWOcclusionCulling->mDepthBuffer;
+	const FLOAT32 cullingWidth = static_cast<FLOAT32>(swDepthBuffer.mResolution.mWidth);
+	const FLOAT32 cullingHeight = static_cast<FLOAT32>(swDepthBuffer.mResolution.mHeight);
+
+	if (cullingWidth <= 0.0f || cullingHeight <= 0.0f)
+	{
+		return;
+	}
+
+	UINT32 testedCount = 0;
+	UINT32 culledAsRawCount = 0;
+	UINT32 culledAsRemappedCount = 0;
+
+	FLOAT32 observedMinNDCZ = 1000.0f;
+	FLOAT32 observedMaxNDCZ = -1000.0f;
+
+	for (culling::EntityBlock* const entityBlock : cullingSystem->GetActiveEntityBlockList())
+	{
+		if (entityBlock == nullptr)
+		{
+			continue;
+		}
+
+		for (size_t entityIndex = 0; entityIndex < entityBlock->mCurrentEntityCount; entityIndex++)
+		{
+			if (entityBlock->GetIsObjectEnabled(entityIndex) == false)
+			{
+				continue;
+			}
+
+			// Behind the camera, so the screen bounds mean nothing.
+			if (entityBlock->mIsAllAABBClipPointWPositive[entityIndex] == false)
+			{
+				continue;
+			}
+
+			const FLOAT32 objectNDCZ = entityBlock->mAABBMinNDCZ[entityIndex];
+
+			observedMinNDCZ = (objectNDCZ < observedMinNDCZ) ? objectNDCZ : observedMinNDCZ;
+			observedMaxNDCZ = (objectNDCZ > observedMaxNDCZ) ? objectNDCZ : observedMaxNDCZ;
+
+			const FLOAT32 minU = entityBlock->mAABBMinScreenSpacePointX[entityIndex] / cullingWidth;
+			const FLOAT32 maxU = entityBlock->mAABBMaxScreenSpacePointX[entityIndex] / cullingWidth;
+			const FLOAT32 minV = entityBlock->mAABBMinScreenSpacePointY[entityIndex] / cullingHeight;
+			const FLOAT32 maxV = entityBlock->mAABBMaxScreenSpacePointY[entityIndex] / cullingHeight;
+
+			const INT32 startX = static_cast<INT32>(math::Max(0.0f, minU) * mHiZReadbackWidth);
+			const INT32 endX = static_cast<INT32>(math::Min(1.0f, maxU) * mHiZReadbackWidth);
+			const INT32 startY = static_cast<INT32>(math::Max(0.0f, minV) * mHiZReadbackHeight);
+			const INT32 endY = static_cast<INT32>(math::Min(1.0f, maxV) * mHiZReadbackHeight);
+
+			if (startX > endX || startY > endY)
+			{
+				continue;
+			}
+
+			// The farthest thing drawn anywhere the object covers. Occluded only
+			// if the object's nearest point is behind all of it, so a rectangle
+			// touching empty background is never culled: background reads as the
+			// far value and nothing can be behind that.
+			FLOAT32 farthestStoredDepth = 0.0f;
+
+			for (INT32 y = startY; y <= endY && y < static_cast<INT32>(mHiZReadbackHeight); y++)
+			{
+				for (INT32 x = startX; x <= endX && x < static_cast<INT32>(mHiZReadbackWidth); x++)
+				{
+					const FLOAT32 storedDepth = mHiZReadbackData[static_cast<size_t>(y) * mHiZReadbackWidth + x];
+					farthestStoredDepth = (storedDepth > farthestStoredDepth) ? storedDepth : farthestStoredDepth;
+				}
+			}
+
+			testedCount++;
+
+			// Both readings of the object's depth, because which one is right
+			// depends on the projection convention and getting it wrong culls
+			// things that are visible. The observed range decides it.
+			if (objectNDCZ >= farthestStoredDepth)
+			{
+				culledAsRawCount++;
+			}
+
+			if (((objectNDCZ + 1.0f) * 0.5f) >= farthestStoredDepth)
+			{
+				culledAsRemappedCount++;
+			}
+		}
+	}
+
+	if ((mHiZFrameCounter % 300) == 0 && testedCount > 0)
+	{
+		D_RELEASE_LOG(eLogType::D_LOG,
+			"HiZ occlusion : tested %u, would cull %u raw / %u remapped, object ndc z range %f .. %f",
+			testedCount, culledAsRawCount, culledAsRemappedCount, observedMinNDCZ, observedMaxNDCZ);
+	}
 }
 
 void dooms::graphics::DeferredRenderingPipeLine::UpdateHiZVisualization()
