@@ -373,15 +373,21 @@ namespace
         bool mIsViewFrustumEnabled;
         bool mIsDistanceEnabled;
         bool mIsMaskedSWOcclusionEnabled;
+        bool mIsHiZEnabled;
     };
 
     const OcclusionMode gOcclusionModes[] =
     {
-        { "All",                 true,  true,  true  },
-        { "None",                false, false, false },
-        { "Frustum only",        true,  false, false },
-        { "Frustum + Distance",  true,  true,  false },
-        { "Frustum + Occlusion", true,  false, true  }
+        { "All",                 true,  true,  true,  false },
+        { "None",                false, false, false, false },
+        { "Frustum only",        true,  false, false, false },
+        { "Frustum + Distance",  true,  true,  false, false },
+        { "Frustum + Occlusion", true,  false, true,  false },
+
+        // The gpu technique, against the software one above it. Both are
+        // occlusion culling, so they are listed apart rather than combined:
+        // running them together would measure neither.
+        { "Frustum + Hi-Z",      true,  false, false, true  }
     };
 
     constexpr INT32 gOcclusionModeCount
@@ -415,6 +421,10 @@ namespace
             culling::EveryCulling::CullingModuleType::DistanceCulling, occlusionMode.mIsDistanceEnabled);
         cullingSystem->SetEnabledCullingModule(
             culling::EveryCulling::CullingModuleType::MaskedSWOcclusionCulling, occlusionMode.mIsMaskedSWOcclusionEnabled);
+
+        // Not a culling module: it lives in the pipeline, because it reads a
+        // depth pyramid the pipeline owns.
+        dooms::graphics::graphicsSetting::IsHiZOcclusionCullingEnabled = occlusionMode.mIsHiZEnabled;
 
         gOcclusionModeIndex = index;
     }

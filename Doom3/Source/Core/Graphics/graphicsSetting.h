@@ -20,6 +20,10 @@ namespace dooms
 			// Stepped through with F9, so the chain can be inspected rather than
 			// assumed correct.
 			extern inline unsigned int HiZVisualizationLevel{ 0 };
+
+			// Whether the Hi-Z test actually culls, as opposed to only reporting
+			// what it would cull. Driven by the F7 cycle.
+			extern inline bool IsHiZOcclusionCullingEnabled{ false };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

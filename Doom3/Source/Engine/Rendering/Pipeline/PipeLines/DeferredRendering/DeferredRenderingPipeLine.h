@@ -104,7 +104,7 @@ namespace dooms
 			/// buffer holds. Guessing wrong culls things that are visible, which
 			/// is the failure that is hard to notice and easy to ship.
 			/// </summary>
-			void MeasureHiZOcclusion(const size_t cameraIndex);
+			void ApplyHiZOcclusionCulling(const size_t cameraIndex);
 
 			/// <summary>
 			/// Draws a quad covering the target with whatever material is bound.

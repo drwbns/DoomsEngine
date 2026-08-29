@@ -260,7 +260,6 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 	FrameBuffer::StaticBindBackFrameBuffer();
 
 	ReadBackHiZLevel();
-	MeasureHiZOcclusion(0);
 }
 
 void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
@@ -373,7 +372,7 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 	mHiZFrameCounter++;
 }
 
-void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_t cameraIndex)
+void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const size_t cameraIndex)
 {
 	if (bmIsHiZReadbackDataValid == false || mHiZReadbackData.empty())
 	{
@@ -401,7 +400,6 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_
 
 	UINT32 testedCount = 0;
 	UINT32 culledAsRawCount = 0;
-	UINT32 culledAsRemappedCount = 0;
 
 	FLOAT32 observedMinNDCZ = 1000.0f;
 	FLOAT32 observedMaxNDCZ = -1000.0f;
@@ -436,10 +434,16 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_
 			const FLOAT32 minV = entityBlock->mAABBMinScreenSpacePointY[entityIndex] / cullingHeight;
 			const FLOAT32 maxV = entityBlock->mAABBMaxScreenSpacePointY[entityIndex] / cullingHeight;
 
-			const INT32 startX = static_cast<INT32>(math::Max(0.0f, minU) * mHiZReadbackWidth);
-			const INT32 endX = static_cast<INT32>(math::Min(1.0f, maxU) * mHiZReadbackWidth);
-			const INT32 startY = static_cast<INT32>(math::Max(0.0f, minV) * mHiZReadbackHeight);
-			const INT32 endY = static_cast<INT32>(math::Min(1.0f, maxV) * mHiZReadbackHeight);
+			// Widened by a cell on every side. The depth being tested against is
+			// a frame or two old, so an object may have moved, or the camera may
+			// have. Testing a larger rectangle can only bring in more cells,
+			// which can only raise the farthest depth found, which can only make
+			// the test less willing to cull. The error goes towards drawing
+			// something needlessly rather than dropping something visible.
+			const INT32 startX = static_cast<INT32>(math::Max(0.0f, minU) * mHiZReadbackWidth) - 1;
+			const INT32 endX = static_cast<INT32>(math::Min(1.0f, maxU) * mHiZReadbackWidth) + 1;
+			const INT32 startY = static_cast<INT32>(math::Max(0.0f, minV) * mHiZReadbackHeight) - 1;
+			const INT32 endY = static_cast<INT32>(math::Min(1.0f, maxV) * mHiZReadbackHeight) + 1;
 
 			if (startX > endX || startY > endY)
 			{
@@ -452,9 +456,9 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_
 			// far value and nothing can be behind that.
 			FLOAT32 farthestStoredDepth = 0.0f;
 
-			for (INT32 y = startY; y <= endY && y < static_cast<INT32>(mHiZReadbackHeight); y++)
+			for (INT32 y = math::Max(0, startY); y <= endY && y < static_cast<INT32>(mHiZReadbackHeight); y++)
 			{
-				for (INT32 x = startX; x <= endX && x < static_cast<INT32>(mHiZReadbackWidth); x++)
+				for (INT32 x = math::Max(0, startX); x <= endX && x < static_cast<INT32>(mHiZReadbackWidth); x++)
 				{
 					const FLOAT32 storedDepth = mHiZReadbackData[static_cast<size_t>(y) * mHiZReadbackWidth + x];
 					farthestStoredDepth = (storedDepth > farthestStoredDepth) ? storedDepth : farthestStoredDepth;
@@ -463,17 +467,19 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_
 
 			testedCount++;
 
-			// Both readings of the object's depth, because which one is right
-			// depends on the projection convention and getting it wrong culls
-			// things that are visible. The observed range decides it.
-			if (objectNDCZ >= farthestStoredDepth)
+			// Compared directly, in the same space. D3D11 clips z to zero and
+			// one, so a projection producing any other range would not render a
+			// correct frame, and this one does.
+			const bool bIsOccluded = (objectNDCZ >= farthestStoredDepth);
+
+			if (bIsOccluded)
 			{
 				culledAsRawCount++;
-			}
 
-			if (((objectNDCZ + 1.0f) * 0.5f) >= farthestStoredDepth)
-			{
-				culledAsRemappedCount++;
+				if (dooms::graphics::graphicsSetting::IsHiZOcclusionCullingEnabled)
+				{
+					entityBlock->SetCulled(entityIndex, cameraIndex);
+				}
 			}
 		}
 	}
@@ -481,8 +487,10 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureHiZOcclusion(const size_
 	if ((mHiZFrameCounter % 300) == 0 && testedCount > 0)
 	{
 		D_RELEASE_LOG(eLogType::D_LOG,
-			"HiZ occlusion : tested %u, would cull %u raw / %u remapped, object ndc z range %f .. %f",
-			testedCount, culledAsRawCount, culledAsRemappedCount, observedMinNDCZ, observedMaxNDCZ);
+			"HiZ occlusion : tested %u, occluded %u, culling %s, object ndc z range %f .. %f",
+			testedCount, culledAsRawCount,
+			dooms::graphics::graphicsSetting::IsHiZOcclusionCullingEnabled ? "on" : "off",
+			observedMinNDCZ, observedMaxNDCZ);
 	}
 }
 
@@ -662,6 +670,14 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	{
 		mRenderingCullingManager.CameraCullJob(targetCamera); // do this first
 	}
+
+	// Applied here, after the cull job and before anything is drawn.
+	//
+	// PreCullJob resets every entity to visible at the start of each frame, so
+	// marking one culled any later than this is wiped before it can matter. The
+	// data it reads is from an earlier frame, which is the point: waiting for
+	// this frame's pyramid would stall the cpu on the gpu.
+	ApplyHiZOcclusionCulling(cameraIndex);
 
 	if (dooms::graphics::graphicsSetting::IsSortObjectFrontToBack == true)
 	{
