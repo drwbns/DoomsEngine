@@ -311,6 +311,63 @@ namespace dooms
                 }               
             }
 
+            // A depth texture that also has to be sampled cannot be created with
+            // a depth format. D3D11 refuses to build a shader resource view over
+            // one, which is why reading the depth buffer never worked here.
+            //
+            // The resource is created typeless instead and each view names the
+            // concrete format it wants: the depth stencil view asks for the
+            // depth format, the shader resource view asks for the readable one.
+            FORCE_INLINE static bool IsDepthDXGIFormat(const DXGI_FORMAT format)
+            {
+                return (format == DXGI_FORMAT_D16_UNORM)
+                    || (format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+                    || (format == DXGI_FORMAT_D32_FLOAT)
+                    || (format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT);
+            }
+
+            FORCE_INLINE static DXGI_FORMAT ConvertDepthFormat_To_Typeless(const DXGI_FORMAT depthFormat)
+            {
+                switch (depthFormat)
+                {
+                case DXGI_FORMAT_D16_UNORM:             return DXGI_FORMAT_R16_TYPELESS;
+                case DXGI_FORMAT_D24_UNORM_S8_UINT:     return DXGI_FORMAT_R24G8_TYPELESS;
+                case DXGI_FORMAT_D32_FLOAT:             return DXGI_FORMAT_R32_TYPELESS;
+                case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:  return DXGI_FORMAT_R32G8X24_TYPELESS;
+                default:                                return depthFormat;
+                }
+            }
+
+            // Typeless back to the depth format a depth stencil view needs.
+            // Anything else is passed through, so a resource that was created
+            // with a concrete format still gets the view it always got.
+            FORCE_INLINE static DXGI_FORMAT ConvertTypeless_To_DepthStencilViewFormat(const DXGI_FORMAT format)
+            {
+                switch (format)
+                {
+                case DXGI_FORMAT_R16_TYPELESS:          return DXGI_FORMAT_D16_UNORM;
+                case DXGI_FORMAT_R24G8_TYPELESS:        return DXGI_FORMAT_D24_UNORM_S8_UINT;
+                case DXGI_FORMAT_R32_TYPELESS:          return DXGI_FORMAT_D32_FLOAT;
+                case DXGI_FORMAT_R32G8X24_TYPELESS:     return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+                default:                                return format;
+                }
+            }
+
+            // Typeless to the format a shader resource view can read. Returns
+            // UNKNOWN for anything that is not a typeless depth format, which
+            // tells the caller to keep using the resource's own format.
+            FORCE_INLINE static DXGI_FORMAT ConvertTypeless_To_DepthShaderResourceFormat(const DXGI_FORMAT format)
+            {
+                switch (format)
+                {
+                case DXGI_FORMAT_R16_TYPELESS:          return DXGI_FORMAT_R16_UNORM;
+                case DXGI_FORMAT_R24G8_TYPELESS:        return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+                case DXGI_FORMAT_R32_TYPELESS:          return DXGI_FORMAT_R32_FLOAT;
+                case DXGI_FORMAT_R32G8X24_TYPELESS:     return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+                default:                                return DXGI_FORMAT_UNKNOWN;
+                }
+            }
+
             FORCE_INLINE static DXGI_FORMAT ConvertTextureInternalFormat_To_DXGI_FORMAT(const GraphicsAPI::eTextureInternalFormat internalFormat)
             {
                 // reference ( opengl format, dxgi table : https://chromium.googlesource.com/angle/angle/+/6ea6f9424890b2a443fafb940ba27e902b4e9157/src/libANGLE/renderer/d3d/d3d11/texture_format_util.cpp )
@@ -1759,7 +1816,18 @@ namespace dooms
 
             ID3D11DepthStencilView* depthStencilView;
 
-            const HRESULT hr = dx11::g_pd3dDevice->CreateDepthStencilView(textureResource, nullptr, &depthStencilView);
+            D3D11_TEXTURE2D_DESC textureDesc;
+            textureResource->GetDesc(&textureDesc);
+
+            // A typeless resource has no format of its own to infer, so the view
+            // has to name one. Passing nullptr works only while the resource
+            // carries a concrete depth format.
+            D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc = {};
+            depthStencilViewDesc.Format = dx11::ConvertTypeless_To_DepthStencilViewFormat(textureDesc.Format);
+            depthStencilViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+            depthStencilViewDesc.Texture2D.MipSlice = 0;
+
+            const HRESULT hr = dx11::g_pd3dDevice->CreateDepthStencilView(textureResource, &depthStencilViewDesc, &depthStencilView);
             assert(FAILED(hr) == false);
             return reinterpret_cast<unsigned long long>(depthStencilView);
         }
@@ -1805,16 +1873,26 @@ namespace dooms
                 ASSUME_ZERO;
             }
 
+            const long d3d11BindFlag = dx11::Convert_eBindFlag_To_D3D11_BIND_FLAG(bindFlag);
+
+            // Only when it is going to be both rendered into as depth and read
+            // as a texture. A depth attachment nobody samples keeps its depth
+            // format exactly as before.
+            const bool bIsSampledDepthTexture =
+                dx11::IsDepthDXGIFormat(internalFormat) &&
+                ((d3d11BindFlag & D3D11_BIND_DEPTH_STENCIL) != 0) &&
+                ((d3d11BindFlag & D3D11_BIND_SHADER_RESOURCE) != 0);
+
             D3D11_TEXTURE2D_DESC textureDesc = {};
             textureDesc.Width = width;
             textureDesc.Height = height;
             textureDesc.MipLevels = lodCount;
             textureDesc.ArraySize = 1;
-            textureDesc.Format = internalFormat;
+            textureDesc.Format = bIsSampledDepthTexture ? dx11::ConvertDepthFormat_To_Typeless(internalFormat) : internalFormat;
             textureDesc.SampleDesc.Count = 1;
             //textureDesc.SampleDesc.Quality = 0;
             textureDesc.Usage = D3D11_USAGE_DEFAULT;
-            textureDesc.BindFlags = dx11::Convert_eBindFlag_To_D3D11_BIND_FLAG(bindFlag);
+            textureDesc.BindFlags = d3d11BindFlag;
             textureDesc.CPUAccessFlags = 0;
             textureDesc.MiscFlags = 0;
 
@@ -1887,7 +1965,11 @@ namespace dooms
             D3D11_TEXTURE2D_DESC desc;
             textureResource->GetDesc(&desc);
 
-            SRVDesc.Format = desc.Format;
+            // A depth resource is typeless, so the view names the readable
+            // format for it. Everything else keeps the resource's own format.
+            const DXGI_FORMAT depthShaderResourceFormat = dx11::ConvertTypeless_To_DepthShaderResourceFormat(desc.Format);
+
+            SRVDesc.Format = (depthShaderResourceFormat != DXGI_FORMAT_UNKNOWN) ? depthShaderResourceFormat : desc.Format;
             SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             SRVDesc.Texture2D.MipLevels = desc.MipLevels;
 

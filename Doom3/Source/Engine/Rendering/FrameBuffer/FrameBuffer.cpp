@@ -349,7 +349,12 @@ dooms::asset::TextureAsset* dooms::graphics::FrameBuffer::AttachDepthTextureToFr
 		height,
 		GraphicsAPI::eTextureComponentFormat::TEXTURE_COMPONENT_DEPTH_COMPONENT,
 		GraphicsAPI::eDataType::FLOAT,
-		(dooms::graphics::GraphicsAPI::eBindFlag)(dooms::graphics::GraphicsAPI::eBindFlag::BIND_DEPTH_STENCIL /*| dooms::graphics::GraphicsAPI::eBindFlag::BIND_SHADER_RESOURCE */ ),
+		// Sampleable as well as renderable, so the depth buffer can be read back
+		// for visualisation and for techniques that need it. This was commented
+		// out because D3D11 cannot make a shader resource view over a depth
+		// format; the backend now creates such textures typeless, which is what
+		// makes it work.
+		(dooms::graphics::GraphicsAPI::eBindFlag)(dooms::graphics::GraphicsAPI::eBindFlag::BIND_DEPTH_STENCIL | dooms::graphics::GraphicsAPI::eBindFlag::BIND_SHADER_RESOURCE),
 		dooms::graphics::GraphicsAPI::eTextureBindTarget::TEXTURE_2D
 	);
 	const BufferID depthStencilView = GraphicsAPI::Attach2DDepthStencilTextureToFrameBuffer
