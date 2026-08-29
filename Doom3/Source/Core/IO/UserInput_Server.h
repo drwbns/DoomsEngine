@@ -93,6 +93,16 @@ namespace dooms
 			static inline bool IsCursorVisible{ true };
 			static inline bool mScrollChangedAtPreviousFrame{ true };
 
+			// Set when the mouse mode is switched, cleared by the first cursor
+			// position that arrives afterwards.
+			//
+			// Relative mode reports a virtual accumulated position while
+			// absolute mode reports real screen coordinates, so the first
+			// sample after a switch is measured against the wrong frame of
+			// reference. The difference is meaningless and used to jerk the
+			// camera on every press that turned mouse look on.
+			static inline bool mIsCursorDeltaDiscardPending{ false };
+
 			void UpdateCursorMode();
 			void ResetCursorPosition();
 

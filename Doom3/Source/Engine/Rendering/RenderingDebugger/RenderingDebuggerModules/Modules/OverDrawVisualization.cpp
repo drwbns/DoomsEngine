@@ -61,10 +61,25 @@ void dooms::graphics::OverDrawVisualization::EnsureResourcesCreated()
 		return;
 	}
 
-	dooms::asset::ShaderAsset* overDrawVisualizationShader = dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationShader.glsl");
-	mOverDrawVisualizationObjectDrawMaterial = overDrawVisualizationShader->CreateMatrialWithThisShaderAsset();
-	mOverDrawVisualizationObjectDrawMaterial->AddToRootObjectList();
-	D_ASSERT(IsValid(mOverDrawVisualizationObjectDrawMaterial));
+	// Materials are not sized to the screen, so they outlive a resolution
+	// change and are built once. Rebuilding them on every resize left the
+	// previous pair alive on the root object list, where nothing would ever
+	// collect them, and the resize path runs on every fullscreen toggle.
+	if (IsValid(mOverDrawVisualizationObjectDrawMaterial) == false)
+	{
+		dooms::asset::ShaderAsset* const overDrawVisualizationShader
+			= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationShader.glsl");
+
+		D_ASSERT(IsValid(overDrawVisualizationShader));
+		if (IsValid(overDrawVisualizationShader) == false)
+		{
+			return;
+		}
+
+		mOverDrawVisualizationObjectDrawMaterial = overDrawVisualizationShader->CreateMatrialWithThisShaderAsset();
+		mOverDrawVisualizationObjectDrawMaterial->AddToRootObjectList();
+		D_ASSERT(IsValid(mOverDrawVisualizationObjectDrawMaterial));
+	}
 
 	// Constructed with its size, not default constructed. Binding a frame buffer
 	// sets the viewport from these two numbers, and attaching a colour texture
@@ -87,19 +102,26 @@ void dooms::graphics::OverDrawVisualization::EnsureResourcesCreated()
 	// its own presents as a black-to-red wash with no cold end. This material
 	// turns that count into the same cold-to-hot ramp the occlusion heatmap
 	// uses, so the two visualisations read the same way.
-	dooms::asset::ShaderAsset* const overDrawVisualizationPresentShader
-		= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationPresentShader.glsl");
-	if (IsValid(overDrawVisualizationPresentShader))
+	if (IsValid(mOverDrawVisualizationPresentMaterial) == false)
 	{
-		mOverDrawVisualizationPresentMaterial = overDrawVisualizationPresentShader->CreateMatrialWithThisShaderAsset();
-		mOverDrawVisualizationPresentMaterial->AddToRootObjectList();
-		OverDrawVisualizationPIP->SetMaterial(mOverDrawVisualizationPresentMaterial);
+		dooms::asset::ShaderAsset* const overDrawVisualizationPresentShader
+			= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("OverDrawVisualizationPresentShader.glsl");
+
+		// Missing asset is survivable: the picture-in-picture keeps its default
+		// material and shows the raw accumulation instead of the ramp.
+		D_ASSERT(IsValid(overDrawVisualizationPresentShader));
+		if (IsValid(overDrawVisualizationPresentShader))
+		{
+			mOverDrawVisualizationPresentMaterial = overDrawVisualizationPresentShader->CreateMatrialWithThisShaderAsset();
+			mOverDrawVisualizationPresentMaterial->AddToRootObjectList();
+		}
 	}
-	else
+
+	// Set every time, because the picture-in-picture itself is rebuilt on a
+	// resolution change even though the material it uses is not.
+	if (IsValid(mOverDrawVisualizationPresentMaterial))
 	{
-		// Missing asset is survivable: the PIP keeps its default material and
-		// shows the raw accumulation instead of the ramp.
-		D_ASSERT(false);
+		OverDrawVisualizationPIP->SetMaterial(mOverDrawVisualizationPresentMaterial);
 	}
 
 	bmIsOverDrawVisualizationInitialized = true;

@@ -28,6 +28,18 @@ void UserInput_Server::CursorPosition_Callback(FLOAT64 xpos, FLOAT64 ypos)
 	// threw away everything but the final step and left looking around feeling
 	// like it was snapping. ResetCursorPosition zeroes this once a frame,
 	// immediately before those messages are dispatched.
+	if (UserInput_Server::mIsCursorDeltaDiscardPending == true)
+	{
+		// First sample after a mouse mode switch. Adopt it as the new origin
+		// and contribute nothing, since the previous position was recorded in
+		// the other mode's coordinates.
+		UserInput_Server::mIsCursorDeltaDiscardPending = false;
+
+		UserInput_Server::mCurrentCursorScreenPosition.x = static_cast<FLOAT32>(xpos);
+		UserInput_Server::mCurrentCursorScreenPosition.y = static_cast<FLOAT32>(ypos);
+		return;
+	}
+
 	UserInput_Server::mDeltaCursorScreenPosition.x += static_cast<FLOAT32>(xpos) - UserInput_Server::mCurrentCursorScreenPosition.x;
 	UserInput_Server::mDeltaCursorScreenPosition.y += static_cast<FLOAT32>(ypos) - UserInput_Server::mCurrentCursorScreenPosition.y;
 
@@ -257,6 +269,10 @@ void UserInput_Server::SetIsCursorVisible(bool isVisible) noexcept
 void UserInput_Server::SetIsMouseLookEnabled(bool isEnabled) noexcept
 {
 	UserInput_Server::bIsMouseLookEnabled = isEnabled;
+
+	// The next position arrives in a different coordinate space, so throw the
+	// delta it would produce away rather than turning the camera by it.
+	UserInput_Server::mIsCursorDeltaDiscardPending = true;
 
 	// Relative mode reports movement rather than a position, so turning is not
 	// bounded by the window: a sweep can spin on the spot indefinitely.
