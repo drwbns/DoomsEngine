@@ -19,6 +19,10 @@
 #include <Graphics/GraphicsAPI/graphicsAPISetting.h>
 #include <Graphics/graphicsSetting.h>
 
+#include <DObject/DObjectGlobals.h>
+#include <Rendering/Pipeline/GraphicsPipeLine.h>
+#include <Rendering/Pipeline/PipeLines/DefaultGraphcisPipeLine.h>
+
 bool dooms::ui::EngineGUIServer::DestroyImgui()
 {
     const bool isSuccess = dooms::graphics::PlatformImgui::ShutDownPlatformImgui();
@@ -287,6 +291,68 @@ namespace
         gVisualisationCycleIndex = index;
     }
 
+    // The culling configurations F7 steps through.
+    //
+    // Each one turns off a technique so its contribution can be read off the
+    // frame time and the overdraw view: switch to "None" and the overdraw goes
+    // red everywhere, switch to "Frustum + Occlusion" and watch what comes back.
+    //
+    // PreCulling is never in this table. It is not a culling technique -- it
+    // updates bounding spheres and the screen space bounds that the real
+    // modules read, and occluder selection is meaningless without it -- so it
+    // stays on in every mode.
+    struct OcclusionMode
+    {
+        const char* mName;
+        bool mIsViewFrustumEnabled;
+        bool mIsDistanceEnabled;
+        bool mIsMaskedSWOcclusionEnabled;
+    };
+
+    const OcclusionMode gOcclusionModes[] =
+    {
+        { "All",                 true,  true,  true  },
+        { "None",                false, false, false },
+        { "Frustum only",        true,  false, false },
+        { "Frustum + Distance",  true,  true,  false },
+        { "Frustum + Occlusion", true,  false, true  }
+    };
+
+    constexpr INT32 gOcclusionModeCount
+        = static_cast<INT32>(sizeof(gOcclusionModes) / sizeof(gOcclusionModes[0]));
+
+    // Starts at "All", which is how the engine boots, so the label is honest
+    // before F7 is ever pressed.
+    INT32 gOcclusionModeIndex = 0;
+
+    void ApplyOcclusionModeIndex(const INT32 index)
+    {
+        dooms::graphics::DefaultGraphcisPipeLine* const pipeLine
+            = dooms::CastTo<dooms::graphics::DefaultGraphcisPipeLine*>(dooms::graphics::GraphicsPipeLine::GetSingleton());
+
+        if (IsValid(pipeLine) == false)
+        {
+            return;
+        }
+
+        culling::EveryCulling* const cullingSystem = pipeLine->mRenderingCullingManager.mCullingSystem.get();
+        if (cullingSystem == nullptr)
+        {
+            return;
+        }
+
+        const OcclusionMode& occlusionMode = gOcclusionModes[index];
+
+        cullingSystem->SetEnabledCullingModule(
+            culling::EveryCulling::CullingModuleType::ViewFrustumCulling, occlusionMode.mIsViewFrustumEnabled);
+        cullingSystem->SetEnabledCullingModule(
+            culling::EveryCulling::CullingModuleType::DistanceCulling, occlusionMode.mIsDistanceEnabled);
+        cullingSystem->SetEnabledCullingModule(
+            culling::EveryCulling::CullingModuleType::MaskedSWOcclusionCulling, occlusionMode.mIsMaskedSWOcclusionEnabled);
+
+        gOcclusionModeIndex = index;
+    }
+
     void RenderVisualisationPanel()
     {
         using namespace dooms::graphics;
@@ -294,6 +360,7 @@ namespace
         if (dooms::ui::enginePanel::BeginPanel("Visualisation"))
         {
             ImGui::TextDisabled("F6 cycles: %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
+            ImGui::TextDisabled("F7 culling: %s", gOcclusionModes[gOcclusionModeIndex].mName);
 
             VisualisationToggle(
                 "Debug drawing",
@@ -602,6 +669,15 @@ void dooms::ui::EngineGUIServer::Update()
         ApplyVisualisationCycleIndex((gVisualisationCycleIndex + 1) % gVisualisationCycleCount);
 
         D_RELEASE_LOG(eLogType::D_LOG, "Visualisation : %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
+    }
+
+    // F7 steps through the culling configurations, to compare what each
+    // technique is actually buying in this scene.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F7))
+    {
+        ApplyOcclusionModeIndex((gOcclusionModeIndex + 1) % gOcclusionModeCount);
+
+        D_RELEASE_LOG(eLogType::D_LOG, "Culling : %s", gOcclusionModes[gOcclusionModeIndex].mName);
     }
 
     // F4 puts the panels back into the default arrangement.
