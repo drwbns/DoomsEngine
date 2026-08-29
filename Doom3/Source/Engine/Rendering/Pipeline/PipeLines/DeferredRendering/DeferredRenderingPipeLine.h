@@ -60,6 +60,10 @@ namespace dooms
 			// different mip, because that is the only way to render a chain.
 			dooms::asset::TextureAsset* mHiZTexture{ nullptr };
 			std::vector<class FrameBuffer*> mHiZFrameBuffers{};
+
+			// One view per level, each covering only that level, so reading a
+			// level never overlaps the level being written.
+			std::vector<class TextureView*> mHiZSourceViews{};
 			class Material* mHiZCopyMaterial{ nullptr };
 			class Material* mHiZDownsampleMaterial{ nullptr };
 			class PicktureInPickture* mHiZPIP{ nullptr };

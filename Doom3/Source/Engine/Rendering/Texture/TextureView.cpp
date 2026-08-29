@@ -126,6 +126,30 @@ dooms::graphics::TextureView::TextureView
 	mTextureViewObject = GraphicsAPI::CreateTextureViewObject(textureResourceObject->GetTextureResourceObject());
 }
 
+dooms::graphics::TextureView::TextureView
+(
+	const asset::TextureAsset* const textureResourceObject,
+	const UINT32 defaultBindingPosition,
+	const GraphicsAPI::eGraphicsPipeLineStage defaultTargetGraphicsPipeLineStage,
+	const UINT32 mostDetailedMip,
+	const UINT32 mipLevelCount
+)
+	: mTextureViewObject(), mTargetTextureResourceObject(textureResourceObject), mDefaultBindingLocation(defaultBindingPosition), mDefaultTargetGraphicsPipeLineStage(defaultTargetGraphicsPipeLineStage)
+{
+	// Falls back to a view of the whole chain against an older graphics DLL.
+	// Wrong for rendering into the same texture, but the alternative is no view
+	// at all.
+	if (GraphicsAPI::CreateTextureViewObjectWithMipRange != nullptr)
+	{
+		mTextureViewObject = GraphicsAPI::CreateTextureViewObjectWithMipRange(
+			textureResourceObject->GetTextureResourceObject(), mostDetailedMip, mipLevelCount);
+	}
+	else
+	{
+		mTextureViewObject = GraphicsAPI::CreateTextureViewObject(textureResourceObject->GetTextureResourceObject());
+	}
+}
+
 dooms::graphics::TextureView::TextureView(const TextureView& textureView)
 	:
 	mTargetTextureResourceObject(textureView.mTargetTextureResourceObject),

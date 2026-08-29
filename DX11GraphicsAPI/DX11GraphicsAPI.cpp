@@ -2023,6 +2023,45 @@ namespace dooms
             
         }
 
+        DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateTextureViewObjectWithMipRange
+        (
+            const unsigned long long textureObject,
+            const unsigned int mostDetailedMip,
+            const unsigned int mipLevelCount
+        )
+        {
+            assert(textureObject != 0);
+
+            ID3D11Texture2D* const textureResource = reinterpret_cast<ID3D11Texture2D*>(textureObject);
+
+            D3D11_TEXTURE2D_DESC desc;
+            textureResource->GetDesc(&desc);
+
+            const DXGI_FORMAT depthShaderResourceFormat = dx11::ConvertTypeless_To_DepthShaderResourceFormat(desc.Format);
+
+            // Restricted to the levels asked for, which is the whole point:
+            // a view spanning the entire chain overlaps the level being
+            // rendered into, and D3D11 responds by dropping the view rather
+            // than failing the bind, so the shader reads nothing.
+            D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+            SRVDesc.Format = (depthShaderResourceFormat != DXGI_FORMAT_UNKNOWN) ? depthShaderResourceFormat : desc.Format;
+            SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            SRVDesc.Texture2D.MostDetailedMip = mostDetailedMip;
+            SRVDesc.Texture2D.MipLevels = mipLevelCount;
+
+            ID3D11ShaderResourceView* shaderResourceView;
+
+            const HRESULT hr = dx11::g_pd3dDevice->CreateShaderResourceView(textureResource, &SRVDesc, &shaderResourceView);
+            assert(FAILED(hr) == false);
+
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            return reinterpret_cast<unsigned long long>(shaderResourceView);
+        }
+
         DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateTextureViewObject(const unsigned long long textureObject)
         {
             assert(textureObject != 0);

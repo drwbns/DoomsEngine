@@ -900,6 +900,20 @@ namespace dooms
 			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATETEXTUREVIEWOBJECT)(const unsigned long long textureObject);
 			extern GRAPHICS_CREATETEXTUREVIEWOBJECT CreateTextureViewObject;
 
+			/// <summary>
+			/// A view onto part of a texture's mip chain rather than all of it.
+			///
+			/// Needed when a texture is read and written in the same pass, which
+			/// is what building a mip pyramid is: a view covering the whole chain
+			/// overlaps the level being rendered into, and the api resolves that
+			/// by dropping the view, leaving the shader sampling nothing.
+			///
+			/// The view renumbers what it covers, so its first level is level
+			/// zero to a sampler.
+			/// </summary>
+			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATETEXTUREVIEWOBJECTWITHMIPRANGE)(const unsigned long long textureObject, const unsigned int mostDetailedMip, const unsigned int mipLevelCount);
+			extern GRAPHICS_CREATETEXTUREVIEWOBJECTWITHMIPRANGE CreateTextureViewObjectWithMipRange;
+
 			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_DESTROYTEXTUREVIEWOBJECT)(unsigned long long textureViewObject);
 			extern GRAPHICS_DESTROYTEXTUREVIEWOBJECT DestroyTextureViewObject;
 

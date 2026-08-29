@@ -118,6 +118,7 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	dooms::graphics::GraphicsAPI::CreateTextureObject = (GraphicsAPI::GRAPHICS_CREATEXTUREOBJECT)GetProcAddress(hModule, "CreateTextureObject");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateTextureObject != nullptr);
 	dooms::graphics::GraphicsAPI::CreateTextureViewObject = (GraphicsAPI::GRAPHICS_CREATETEXTUREVIEWOBJECT)GetProcAddress(hModule, "CreateTextureViewObject");
+	dooms::graphics::GraphicsAPI::CreateTextureViewObjectWithMipRange = (GraphicsAPI::GRAPHICS_CREATETEXTUREVIEWOBJECTWITHMIPRANGE)GetProcAddress(hModule, "CreateTextureViewObjectWithMipRange");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateTextureViewObject != nullptr);
 	dooms::graphics::GraphicsAPI::CreateVertexArrayObject = (GraphicsAPI::GRAPHICS_CREATEVERTEXARRAYOBJECT)GetProcAddress(hModule, "CreateVertexArrayObject");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateVertexArrayObject != nullptr);

@@ -198,37 +198,58 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 		depthTextureView->UnBindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
 	}
 
-	TextureView* const hiZTextureView = mHiZTexture->GenerateTextureView(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
-
-	if (IsValid(hiZTextureView))
+	// One view per source level, built once and kept.
+	//
+	// A view spanning the whole chain cannot be used here: it would include the
+	// level being rendered into, and D3D11 answers that by unbinding the view
+	// rather than failing the call, which showed up as every level below the
+	// top reading as zero. Each view covers exactly the level being read.
+	if (mHiZSourceViews.empty())
 	{
-		UniformBufferObjectView* const hiZDataView = mHiZDownsampleMaterial->GetUniformBufferObjectViewFromUBOName("HiZData");
+		mHiZSourceViews.reserve(mHiZLevelCount);
 
-		for (UINT32 levelIndex = 1; levelIndex < mHiZLevelCount; levelIndex++)
+		for (UINT32 levelIndex = 0; levelIndex < mHiZLevelCount; levelIndex++)
 		{
-			const UINT32 sourceLevel = levelIndex - 1;
+			TextureView* const levelView = dooms::CreateDObject<TextureView>(
+				mHiZTexture, 0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER, levelIndex, 1);
+			levelView->AddToRootObjectList();
 
-			mHiZFrameBuffers[levelIndex]->BindFrameBuffer();
-			mHiZDownsampleMaterial->BindMaterial();
-
-			if (hiZDataView != nullptr)
-			{
-				hiZDataView->SetVector4((UINT64)0, math::Vector4(
-					static_cast<FLOAT32>(sourceLevel),
-					1.0f / static_cast<FLOAT32>(mHiZTexture->GetTextureWidth(sourceLevel)),
-					1.0f / static_cast<FLOAT32>(mHiZTexture->GetTextureHeight(sourceLevel)),
-					0.0f));
-			}
-
-			// Reading the level above while writing the one below. They are
-			// different mips of the same texture, which D3D11 allows only
-			// because the views do not overlap.
-			hiZTextureView->BindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
-
-			DrawHiZQuad();
-
-			hiZTextureView->UnBindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+			mHiZSourceViews.push_back(levelView);
 		}
+	}
+
+	UniformBufferObjectView* const hiZDataView = mHiZDownsampleMaterial->GetUniformBufferObjectViewFromUBOName("HiZData");
+
+	for (UINT32 levelIndex = 1; levelIndex < mHiZLevelCount; levelIndex++)
+	{
+		const UINT32 sourceLevel = levelIndex - 1;
+
+		TextureView* const sourceView = mHiZSourceViews[sourceLevel];
+		if (IsValid(sourceView) == false)
+		{
+			continue;
+		}
+
+		mHiZFrameBuffers[levelIndex]->BindFrameBuffer();
+		mHiZDownsampleMaterial->BindMaterial();
+
+		if (hiZDataView != nullptr)
+		{
+			// Texel size of the level being read. The level index is not passed
+			// because the view covers one level, so to a sampler it is level
+			// zero whichever level of the chain it actually is.
+			hiZDataView->SetVector4((UINT64)0, math::Vector4(
+				0.0f,
+				1.0f / static_cast<FLOAT32>(mHiZTexture->GetTextureWidth(sourceLevel)),
+				1.0f / static_cast<FLOAT32>(mHiZTexture->GetTextureHeight(sourceLevel)),
+				0.0f));
+		}
+
+		sourceView->BindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+
+		DrawHiZQuad();
+
+		sourceView->UnBindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
 	}
 
 	GraphicsAPI::SetIsDepthTestEnabled(true);

@@ -52,9 +52,29 @@ namespace dooms
 
 			TextureView
 			(
-				const asset::TextureAsset* const textureResourceObject, 
+				const asset::TextureAsset* const textureResourceObject,
 				const UINT32 defaultBindingPosition,
 				const GraphicsAPI::eGraphicsPipeLineStage defaultTargetGraphicsPipeLineStage
+			);
+
+			/// <summary>
+			/// A view onto part of the mip chain instead of all of it.
+			///
+			/// Needed when the same texture is read and written in one pass, as
+			/// when building a mip pyramid: a view over the whole chain includes
+			/// the level being rendered into, which D3D11 will not allow and
+			/// resolves by dropping the view.
+			///
+			/// The view renumbers what it covers, so the first level it includes
+			/// is level zero to a sampler.
+			/// </summary>
+			TextureView
+			(
+				const asset::TextureAsset* const textureResourceObject,
+				const UINT32 defaultBindingPosition,
+				const GraphicsAPI::eGraphicsPipeLineStage defaultTargetGraphicsPipeLineStage,
+				const UINT32 mostDetailedMip,
+				const UINT32 mipLevelCount
 			);
 			TextureView(const TextureView&);
 			TextureView& operator=(const TextureView&);

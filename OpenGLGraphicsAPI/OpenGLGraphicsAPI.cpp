@@ -1940,6 +1940,26 @@ namespace dooms
 			return textureObject;
 		}
 
+		DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateTextureViewObjectWithMipRange
+		(
+			const unsigned long long textureObject,
+			const unsigned int mostDetailedMip,
+			const unsigned int mipLevelCount
+		)
+		{
+			assert(textureObject != 0);
+
+			// OpenGL has no separate view object here, so the texture is its own
+			// view and the range cannot be expressed by one. Restricting it would
+			// mean glTextureView and a second texture name to track and destroy.
+			//
+			// The reason the range exists is a D3D11 rule about a resource being
+			// readable and writable at once, which OpenGL states as undefined
+			// behaviour rather than enforcing. Callers pass the level they want
+			// to textureLod regardless, so sampling still reads the right level.
+			return textureObject;
+		}
+
 		DOOMS_ENGINE_GRAPHICS_API void DestroyTextureViewObject(unsigned long long textureViewObject)
 		{
 			assert(textureViewObject != 0);
