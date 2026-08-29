@@ -1841,8 +1841,20 @@ namespace dooms
             ID3D11Texture2D* const textureResource = reinterpret_cast<ID3D11Texture2D*>(textureBufferObject);
 
             ID3D11RenderTargetView* renderTargetView;
-           
-			const HRESULT hr = dx11::g_pd3dDevice->CreateRenderTargetView(textureResource, nullptr, &renderTargetView);
+
+            D3D11_TEXTURE2D_DESC textureDesc;
+            textureResource->GetDesc(&textureDesc);
+
+            // lodLevel was accepted and then thrown away: a null description
+            // always targets mip zero. Nothing noticed because nothing had ever
+            // rendered into a mip other than the top one, and building a
+            // hierarchical depth pyramid is exactly that.
+            D3D11_RENDER_TARGET_VIEW_DESC renderTargetViewDesc = {};
+            renderTargetViewDesc.Format = textureDesc.Format;
+            renderTargetViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            renderTargetViewDesc.Texture2D.MipSlice = lodLevel;
+
+			const HRESULT hr = dx11::g_pd3dDevice->CreateRenderTargetView(textureResource, &renderTargetViewDesc, &renderTargetView);
             assert(FAILED(hr) == false);
             return reinterpret_cast<unsigned long long>(renderTargetView);
 		}
