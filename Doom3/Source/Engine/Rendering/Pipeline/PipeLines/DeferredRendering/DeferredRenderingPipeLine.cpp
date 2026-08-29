@@ -73,6 +73,62 @@ dooms::graphics::GraphicsPipeLineCamera* dooms::graphics::DeferredRenderingPipeL
 
 
 
+dooms::graphics::PicktureInPickture* dooms::graphics::DeferredRenderingPipeLine::CreateFullscreenPIP(TextureView* const textureView)
+{
+	if (IsValid(textureView) == false)
+	{
+		return nullptr;
+	}
+
+	PicktureInPickture* const pip = mGraphicsServer.mPIPManager.AddNewPIP(
+		math::Vector2(-1.0f, -1.0f),
+		math::Vector2(1.0f, 1.0f),
+		textureView);
+
+	if (IsValid(pip))
+	{
+		pip->AddToRootObjectList();
+	}
+
+	return pip;
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::UpdateAlbedoVisualization(dooms::Camera* const targetCamera)
+{
+	if (dooms::graphics::graphicsSetting::RenderMode != dooms::graphics::graphicsSetting::eRenderMode::Textured)
+	{
+		if (IsValid(mAlbedoPIP))
+		{
+			mAlbedoPIP->bmIsDrawOnScreen = false;
+		}
+		return;
+	}
+
+	if (IsValid(mAlbedoPIP) == false)
+	{
+		dooms::graphics::DeferredRenderingPipeLineCamera* const deferredRenderingPipeLineCamera
+			= CastTo<graphics::DeferredRenderingPipeLineCamera*>(targetCamera->GetGraphicsPipeLineCamera());
+
+		if (IsValid(deferredRenderingPipeLineCamera) == false)
+		{
+			return;
+		}
+
+		// Albedo is colour attachment 2 of the g-buffer, after position and
+		// normal. Shown with the stock material, since it is already a plain
+		// colour texture and wants no interpretation.
+		mAlbedoPIP = CreateFullscreenPIP(
+			deferredRenderingPipeLineCamera->mDeferredRenderingFrameBuffer.GetColorTextureView(2, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER));
+
+		if (IsValid(mAlbedoPIP) == false)
+		{
+			return;
+		}
+	}
+
+	mAlbedoPIP->bmIsDrawOnScreen = true;
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::UpdateDepthBufferVisualization(dooms::Camera* const targetCamera)
 {
 	if (dooms::graphics::graphicsSetting::IsDepthBufferVisualizationEnabled == false)
@@ -102,11 +158,12 @@ void dooms::graphics::DeferredRenderingPipeLine::UpdateDepthBufferVisualization(
 			return;
 		}
 
-		mDepthBufferPIP = mGraphicsServer.mPIPManager.AddNewPIP(
-			math::Vector2(-1.0f, -1.0f),
-			math::Vector2(1.0f, 1.0f),
-			depthTextureView);
-		mDepthBufferPIP->AddToRootObjectList();
+		mDepthBufferPIP = CreateFullscreenPIP(depthTextureView);
+
+		if (IsValid(mDepthBufferPIP) == false)
+		{
+			return;
+		}
 
 		// The stock picture-in-picture material would show raw depth, which is
 		// so non linear that everything past the near plane reads as flat white.
@@ -239,6 +296,7 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		// Updated here because the depth attachment is only safe to sample once
 		// the g-buffer is unbound, which the back buffer bind above has done.
 		UpdateDepthBufferVisualization(targetCamera);
+		UpdateAlbedoVisualization(targetCamera);
 
 		// After the lighting resolve, not before it. The resolve covers the
 		// whole back buffer, so anything drawn ahead of it was painted over --

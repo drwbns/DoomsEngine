@@ -21,7 +21,10 @@ namespace dooms
 			enum class eRenderMode : unsigned int
 			{
 				Shaded,
-				Wireframe
+				Wireframe,
+
+				// Albedo straight out of the g-buffer, with no lighting applied.
+				Textured
 			};
 
 			extern inline eRenderMode RenderMode{ eRenderMode::Shaded };

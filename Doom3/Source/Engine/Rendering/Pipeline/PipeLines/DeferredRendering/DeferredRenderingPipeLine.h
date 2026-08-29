@@ -28,12 +28,24 @@ namespace dooms
 			// back for the same pointer.
 			class PicktureInPickture* mDepthBufferPIP{ nullptr };
 			class Material* mDepthBufferPresentMaterial{ nullptr };
+			class PicktureInPickture* mAlbedoPIP{ nullptr };
+
+			/// <summary>
+			/// A picture-in-picture covering the whole viewport, showing one
+			/// texture. Returns null if the texture is not available yet.
+			/// </summary>
+			class PicktureInPickture* CreateFullscreenPIP(class TextureView* const textureView);
 
 			/// <summary>
 			/// Shows or hides the depth view, building it on first use. The depth
 			/// texture belongs to the camera, so this cannot be done any earlier.
 			/// </summary>
 			void UpdateDepthBufferVisualization(dooms::Camera* const targetCamera);
+
+			/// <summary>
+			/// Shows or hides the unlit albedo view for the textured render mode.
+			/// </summary>
+			void UpdateAlbedoVisualization(dooms::Camera* const targetCamera);
 
 			void CameraRender(dooms::Camera* const targetCamera, const size_t cameraIndex) override;
 

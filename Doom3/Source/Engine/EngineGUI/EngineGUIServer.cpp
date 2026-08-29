@@ -428,7 +428,8 @@ namespace
     const RenderModeEntry gRenderModes[] =
     {
         { "Shaded",    dooms::graphics::graphicsSetting::eRenderMode::Shaded },
-        { "Wireframe", dooms::graphics::graphicsSetting::eRenderMode::Wireframe }
+        { "Wireframe", dooms::graphics::graphicsSetting::eRenderMode::Wireframe },
+        { "Textured",  dooms::graphics::graphicsSetting::eRenderMode::Textured }
     };
 
     constexpr INT32 gRenderModeCount
