@@ -1671,21 +1671,24 @@ namespace dooms
             dx11::g_pImmediateContext->RSGetState(&state);
             state->GetDesc(&desc);
 
+            // RSGetState returns a reference that belongs to the caller.
+            state->Release();
+
             switch (cullFace)
             {
-            case GraphicsAPI::CULLFACE_FRONT: 
+            case GraphicsAPI::CULLFACE_FRONT:
                 desc.CullMode = D3D11_CULL_MODE::D3D11_CULL_FRONT;
                 break;
-            case GraphicsAPI::CULLFACE_BACK: 
+            case GraphicsAPI::CULLFACE_BACK:
                 desc.CullMode = D3D11_CULL_MODE::D3D11_CULL_BACK;
                 break;
-            case GraphicsAPI::CULLFACE_FRONT_AND_BACK: 
+            case GraphicsAPI::CULLFACE_FRONT_AND_BACK:
                 desc.CullMode = D3D11_CULL_MODE::D3D11_CULL_NONE;
                 break;
             default:
                 ASSUME_ZERO;
             }
-            
+
             dx11::g_pImmediateContext->RSSetState(dx11::FindOrCreateID3D11RasterizerState(desc));
         }
 
@@ -1736,12 +1739,15 @@ namespace dooms
             dx11::g_pImmediateContext->RSGetState(&state);
             state->GetDesc(&desc);
 
+            // RSGetState returns a reference that belongs to the caller.
+            state->Release();
+
             switch (winding)
             {
             case GraphicsAPI::CW:
                 desc.FrontCounterClockwise = false;
                 break;
-            case GraphicsAPI::CCW: 
+            case GraphicsAPI::CCW:
                 desc.FrontCounterClockwise = true;
                 break;
             default:

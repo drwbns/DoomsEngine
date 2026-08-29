@@ -14,6 +14,8 @@
 #include "EngineGUIPanel.h"
 
 #include <cstring>
+#include <cstdarg>
+#include <cstdio>
 
 #include <IO/UserInput_Server.h>
 #include <Graphics/GraphicsAPI/graphicsAPISetting.h>
@@ -48,6 +50,68 @@ namespace
 
     // Set by F4, cleared once the dockspace has rebuilt its layout.
     bool gDockLayoutResetRequested = false;
+
+    // The transient message shown when a mode is changed with an F key.
+    //
+    // It is drawn outside the panel system on purpose. The function keys are
+    // most useful with the interface hidden, which is exactly when no panel is
+    // there to say what just happened.
+    char gNotificationText[128] = "";
+    double gNotificationExpiryTime = 0.0;
+
+    constexpr double NOTIFICATION_DURATION_SECONDS = 2.0;
+    constexpr double NOTIFICATION_FADE_SECONDS = 0.6;
+
+    void ShowNotification(const char* const format, ...)
+    {
+        va_list arguments;
+        va_start(arguments, format);
+        vsnprintf(gNotificationText, sizeof(gNotificationText), format, arguments);
+        va_end(arguments);
+
+        gNotificationExpiryTime = ImGui::GetTime() + NOTIFICATION_DURATION_SECONDS;
+    }
+
+    void RenderNotification()
+    {
+        const double currentTime = ImGui::GetTime();
+
+        if (currentTime >= gNotificationExpiryTime)
+        {
+            return;
+        }
+
+        const double remainingSeconds = gNotificationExpiryTime - currentTime;
+        const float alpha = (remainingSeconds < NOTIFICATION_FADE_SECONDS)
+            ? static_cast<float>(remainingSeconds / NOTIFICATION_FADE_SECONDS)
+            : 1.0f;
+
+        const ImGuiViewport* const viewport = ImGui::GetMainViewport();
+        const ImVec2 topCentre(
+            viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+            viewport->WorkPos.y + 24.0f);
+
+        ImGui::SetNextWindowPos(topCentre, ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowBgAlpha(0.65f * alpha);
+
+        // NoInputs matters: this sits over the scene and must never take the
+        // mouse, least of all while mouse look is on.
+        const ImGuiWindowFlags notificationFlags =
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+
+        if (ImGui::Begin("##EngineNotification", nullptr, notificationFlags))
+        {
+            ImGui::TextUnformatted(gNotificationText);
+        }
+        ImGui::End();
+
+        ImGui::PopStyleVar();
+    }
 }
 
 namespace dooms
@@ -522,6 +586,10 @@ void dooms::ui::EngineGUIServer::Render()
             }
         }
 
+        // Last, and deliberately not gated on the display mode, so that a mode
+        // change still announces itself with the interface hidden.
+        RenderNotification();
+
         ImGui::Render();
     }
 }
@@ -677,21 +745,34 @@ void dooms::ui::EngineGUIServer::Update()
             // the interface unrecoverable.
             bmIsEngineGUIAvaliable = true;
         }
+
+        ShowNotification("Interface: %s", bShouldShow ? "Shown" : "Hidden");
     }
 
     // F2 swaps between the docked view and a single focused overlay.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F2))
     {
-        enginePanel::SetDisplayMode(
-            (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::FocusedOverlay)
-                ? eEngineGUIDisplayMode::All
-                : eEngineGUIDisplayMode::FocusedOverlay);
+        const bool bWasOverlay = (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::FocusedOverlay);
+
+        enginePanel::SetDisplayMode(bWasOverlay
+            ? eEngineGUIDisplayMode::All
+            : eEngineGUIDisplayMode::FocusedOverlay);
+
+        ShowNotification("Layout: %s", bWasOverlay ? "Docked" : "Overlay");
     }
 
     // F11 toggles borderless fullscreen, the usual binding for it.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F11))
     {
         ToggleBorderlessFullscreen();
+
+        // Read back rather than assumed, because the toggle does nothing at all
+        // when the graphics DLL has no fullscreen entry points.
+        if (dooms::graphics::GraphicsAPI::IsBorderlessFullscreen != nullptr)
+        {
+            ShowNotification("Display: %s",
+                (dooms::graphics::GraphicsAPI::IsBorderlessFullscreen() != 0) ? "Fullscreen" : "Windowed");
+        }
     }
 
     // F6 steps through the visualisations one at a time, starting from off.
@@ -700,6 +781,7 @@ void dooms::ui::EngineGUIServer::Update()
         ApplyVisualisationCycleIndex((gVisualisationCycleIndex + 1) % gVisualisationCycleCount);
 
         D_RELEASE_LOG(eLogType::D_LOG, "Visualisation : %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
+        ShowNotification("View: %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
     }
 
     // F7 steps through the culling configurations, to compare what each
@@ -709,6 +791,7 @@ void dooms::ui::EngineGUIServer::Update()
         ApplyOcclusionModeIndex((gOcclusionModeIndex + 1) % gOcclusionModeCount);
 
         D_RELEASE_LOG(eLogType::D_LOG, "Culling : %s", gOcclusionModes[gOcclusionModeIndex].mName);
+        ShowNotification("Culling: %s", gOcclusionModes[gOcclusionModeIndex].mName);
     }
 
     // F8 steps through how the geometry is drawn.
@@ -717,6 +800,7 @@ void dooms::ui::EngineGUIServer::Update()
         ApplyRenderModeIndex((gRenderModeIndex + 1) % gRenderModeCount);
 
         D_RELEASE_LOG(eLogType::D_LOG, "Render mode : %s", gRenderModes[gRenderModeIndex].mName);
+        ShowNotification("Render mode: %s", gRenderModes[gRenderModeIndex].mName);
     }
 
     // F4 puts the panels back into the default arrangement.
@@ -724,6 +808,8 @@ void dooms::ui::EngineGUIServer::Update()
     {
         enginePanel::SetDisplayMode(eEngineGUIDisplayMode::All);
         enginePanel::RequestDockLayoutReset();
+
+        ShowNotification("Layout: Reset");
     }
 
     // F3 steps through the panels, switching to the overlay if not already there.
@@ -741,6 +827,8 @@ void dooms::ui::EngineGUIServer::Update()
         }
 
         enginePanel::SetFocusedPanelName(focusablePanels[focusedPanelIndex]);
+
+        ShowNotification("Focus: %s", focusablePanels[focusedPanelIndex]);
     }
 
     // The interface and mouse look want the cursor for opposite reasons: panels
