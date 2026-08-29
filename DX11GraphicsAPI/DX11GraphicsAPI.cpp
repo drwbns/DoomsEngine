@@ -389,6 +389,23 @@ namespace dooms
                 case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_DEPTH32F_STENCIL8:
                     return DXGI_FORMAT_R32G8X24_TYPELESS;
 
+                // Single and two channel float targets. These sat in the run of
+                // unhandled cases below, so asking for one asserted rather than
+                // producing a texture. A hierarchical depth pyramid stores one
+                // float per texel and has nowhere else to put it.
+                case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_R16F:
+                    return DXGI_FORMAT_R16_FLOAT;
+                case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_R32F:
+                    return DXGI_FORMAT_R32_FLOAT;
+                case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RG16F:
+                    return DXGI_FORMAT_R16G16_FLOAT;
+                case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RG32F:
+                    return DXGI_FORMAT_R32G32_FLOAT;
+                case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGBA16F:
+                    return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGBA32F:
+                    return DXGI_FORMAT_R32G32B32A32_FLOAT;
+
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_NONE: 
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_STENCIL_INDEX: 
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_STENCIL_INDEX8: 
@@ -421,14 +438,8 @@ namespace dooms
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGBA16: 
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_SRGB8: 
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_SRGB8_ALPHA8: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_R16F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RG16F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGB16F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGBA16F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_R32F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RG32F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGB32F: 
-	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGBA32F: 
+	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGB16F:
+	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGB32F:
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_R11F_G11F_B10F: 
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_RGB9_E5: 
 	            case GraphicsAPI::TEXTURE_INTERNAL_FORMAT_R8I: 
