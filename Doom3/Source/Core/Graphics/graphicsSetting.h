@@ -17,6 +17,15 @@ namespace dooms
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 
+			// How the scene geometry is rasterised.
+			enum class eRenderMode : unsigned int
+			{
+				Shaded,
+				Wireframe
+			};
+
+			extern inline eRenderMode RenderMode{ eRenderMode::Shaded };
+
 			void LoadData();
 		}
 	}

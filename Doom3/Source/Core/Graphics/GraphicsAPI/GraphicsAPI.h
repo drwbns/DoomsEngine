@@ -267,6 +267,21 @@ namespace dooms
 			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_SETCULLFACE)(const eCullFace cullFace);
 			extern GRAPHICS_SETCULLFACE SetCullFace;
 
+			enum eFillMode : unsigned int
+			{
+				FILLMODE_SOLID,
+				FILLMODE_WIREFRAME
+			};
+
+			/// <summary>
+			/// Whether triangles are filled or drawn as their edges.
+			///
+			/// Rasterizer state, so it applies to everything drawn after it and
+			/// has to be put back afterwards.
+			/// </summary>
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_SETFILLMODE)(const eFillMode fillMode);
+			extern GRAPHICS_SETFILLMODE SetFillMode;
+
 			enum eWinding : unsigned int
 			{
 				CW,

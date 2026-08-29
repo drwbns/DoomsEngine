@@ -1689,6 +1689,46 @@ namespace dooms
             dx11::g_pImmediateContext->RSSetState(dx11::FindOrCreateID3D11RasterizerState(desc));
         }
 
+        DOOMS_ENGINE_GRAPHICS_API void SetFillMode(const GraphicsAPI::eFillMode fillMode)
+        {
+            ID3D11RasterizerState* state = nullptr;
+            dx11::g_pImmediateContext->RSGetState(&state);
+
+            D3D11_RASTERIZER_DESC desc;
+
+            if (state != nullptr)
+            {
+                state->GetDesc(&desc);
+
+                // RSGetState hands back a reference. The other setters here drop
+                // theirs, which leaks a state object per call; this one does not.
+                state->Release();
+            }
+            else
+            {
+                // Nothing set yet, so start from the defaults rather than from
+                // an uninitialised description.
+                desc = {};
+                desc.FillMode = D3D11_FILL_SOLID;
+                desc.CullMode = D3D11_CULL_BACK;
+                desc.DepthClipEnable = TRUE;
+            }
+
+            switch (fillMode)
+            {
+            case GraphicsAPI::FILLMODE_SOLID:
+                desc.FillMode = D3D11_FILL_SOLID;
+                break;
+            case GraphicsAPI::FILLMODE_WIREFRAME:
+                desc.FillMode = D3D11_FILL_WIREFRAME;
+                break;
+            default:
+                ASSUME_ZERO;
+            }
+
+            dx11::g_pImmediateContext->RSSetState(dx11::FindOrCreateID3D11RasterizerState(desc));
+        }
+
         DOOMS_ENGINE_GRAPHICS_API void SetFrontFaceWinding(const GraphicsAPI::eWinding winding)
         {
             ID3D11RasterizerState* state;

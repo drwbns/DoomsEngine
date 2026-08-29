@@ -194,6 +194,7 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	dooms::graphics::GraphicsAPI::SetBlendFactor = (GraphicsAPI::GRAPHICS_SETBLENDFACTOR)GetProcAddress(hModule, "SetBlendFactor");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::SetBlendFactor != nullptr);
 	dooms::graphics::GraphicsAPI::SetCullFace = (GraphicsAPI::GRAPHICS_SETCULLFACE)GetProcAddress(hModule, "SetCullFace");
+	dooms::graphics::GraphicsAPI::SetFillMode = (GraphicsAPI::GRAPHICS_SETFILLMODE)GetProcAddress(hModule, "SetFillMode");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::SetCullFace != nullptr);
 	dooms::graphics::GraphicsAPI::SetDebugFunction = (GraphicsAPI::GRAPHICS_SETDEBUGFUNCTION)GetProcAddress(hModule, "SetDebugFunction");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::SetDebugFunction != nullptr);

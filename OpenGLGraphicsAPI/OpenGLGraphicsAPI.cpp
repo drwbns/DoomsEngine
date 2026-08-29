@@ -1350,6 +1350,23 @@ namespace dooms
 			}
 		}
 
+		DOOMS_ENGINE_GRAPHICS_API void SetFillMode(const GraphicsAPI::eFillMode fillMode)
+		{
+			switch (fillMode)
+			{
+			case GraphicsAPI::FILLMODE_SOLID:
+				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+				break;
+
+			case GraphicsAPI::FILLMODE_WIREFRAME:
+				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				break;
+
+			default:
+				ASSUME_ZERO;
+			}
+		}
+
 		DOOMS_ENGINE_GRAPHICS_API void SetFrontFaceWinding(const GraphicsAPI::eWinding winding)
 		{
 			glFrontFace(opengl::GetGLWinding(winding));

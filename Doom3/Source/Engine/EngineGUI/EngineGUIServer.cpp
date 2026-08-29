@@ -354,6 +354,30 @@ namespace
         gOcclusionModeIndex = index;
     }
 
+    // How the geometry itself is drawn, stepped through by F8.
+    struct RenderModeEntry
+    {
+        const char* mName;
+        dooms::graphics::graphicsSetting::eRenderMode mMode;
+    };
+
+    const RenderModeEntry gRenderModes[] =
+    {
+        { "Shaded",    dooms::graphics::graphicsSetting::eRenderMode::Shaded },
+        { "Wireframe", dooms::graphics::graphicsSetting::eRenderMode::Wireframe }
+    };
+
+    constexpr INT32 gRenderModeCount
+        = static_cast<INT32>(sizeof(gRenderModes) / sizeof(gRenderModes[0]));
+
+    INT32 gRenderModeIndex = 0;
+
+    void ApplyRenderModeIndex(const INT32 index)
+    {
+        dooms::graphics::graphicsSetting::RenderMode = gRenderModes[index].mMode;
+        gRenderModeIndex = index;
+    }
+
     void RenderVisualisationPanel()
     {
         using namespace dooms::graphics;
@@ -362,6 +386,7 @@ namespace
         {
             ImGui::TextDisabled("F6 cycles: %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
             ImGui::TextDisabled("F7 culling: %s", gOcclusionModes[gOcclusionModeIndex].mName);
+            ImGui::TextDisabled("F8 render: %s", gRenderModes[gRenderModeIndex].mName);
 
             VisualisationToggle(
                 "Debug drawing",
@@ -684,6 +709,14 @@ void dooms::ui::EngineGUIServer::Update()
         ApplyOcclusionModeIndex((gOcclusionModeIndex + 1) % gOcclusionModeCount);
 
         D_RELEASE_LOG(eLogType::D_LOG, "Culling : %s", gOcclusionModes[gOcclusionModeIndex].mName);
+    }
+
+    // F8 steps through how the geometry is drawn.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F8))
+    {
+        ApplyRenderModeIndex((gRenderModeIndex + 1) % gRenderModeCount);
+
+        D_RELEASE_LOG(eLogType::D_LOG, "Render mode : %s", gRenderModes[gRenderModeIndex].mName);
     }
 
     // F4 puts the panels back into the default arrangement.

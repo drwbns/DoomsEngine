@@ -170,8 +170,30 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		GraphicsAPI::SetIsDepthTestEnabled(true);
 		GraphicsAPI::SetDepthMask(true);
 		GraphicsAPI::SetDepthFunc(GraphicsAPI::eTestFuncType::LEQUAL);
+
+		// Wireframe is rasterizer state, so it wraps the geometry pass only and
+		// is put back afterwards. Leaving it on would draw the deferred lighting
+		// quad and every debug overlay as wireframe too.
+		//
+		// Null checked because the entry point is resolved from the graphics DLL
+		// and an older one will not have it.
+		const bool bIsWireframe =
+			(dooms::graphics::graphicsSetting::RenderMode == dooms::graphics::graphicsSetting::eRenderMode::Wireframe) &&
+			(GraphicsAPI::SetFillMode != nullptr);
+
+		if (bIsWireframe)
+		{
+			GraphicsAPI::SetFillMode(GraphicsAPI::eFillMode::FILLMODE_WIREFRAME);
+		}
+
 		DrawBatchedRenderers();
 		DrawRenderers(targetCamera, cameraIndex);
+
+		if (bIsWireframe)
+		{
+			GraphicsAPI::SetFillMode(GraphicsAPI::eFillMode::FILLMODE_SOLID);
+		}
+
 		D_END_PROFILING(RenderObject);
 	}
 
