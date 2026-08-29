@@ -66,7 +66,11 @@ void dooms::graphics::OverDrawVisualization::EnsureResourcesCreated()
 	mOverDrawVisualizationObjectDrawMaterial->AddToRootObjectList();
 	D_ASSERT(IsValid(mOverDrawVisualizationObjectDrawMaterial));
 
-	mOverDrawVisualizationFrameBuffer = dooms::CreateDObject<dooms::graphics::FrameBuffer>();
+	// Constructed with its size, not default constructed. Binding a frame buffer
+	// sets the viewport from these two numbers, and attaching a colour texture
+	// does not fill them in, so the default constructor leaves them at zero and
+	// every draw goes to a zero area viewport.
+	mOverDrawVisualizationFrameBuffer = dooms::CreateDObject<dooms::graphics::FrameBuffer>(graphicsAPISetting::GetScreenWidth(), graphicsAPISetting::GetScreenHeight());
 	mOverDrawVisualizationFrameBuffer->AttachColorTextureToFrameBuffer(0, graphicsAPISetting::GetScreenWidth(), graphicsAPISetting::GetScreenHeight());
 	mOverDrawVisualizationFrameBuffer->AttachDepthTextureToFrameBuffer(graphicsAPISetting::GetScreenWidth(), graphicsAPISetting::GetScreenHeight());
 	mOverDrawVisualizationFrameBuffer->AddToRootObjectList();

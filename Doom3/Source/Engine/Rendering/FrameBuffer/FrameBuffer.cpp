@@ -76,6 +76,12 @@ void dooms::graphics::FrameBuffer::StaticBindFrameBuffer(const FrameBuffer* cons
 			const unsigned long long depthStencilView = (IsValid(frameBuffer->mAttachedDepthStencilTextureView) && frameBuffer->mAttachedDepthStencilTextureView->IsValid()) ? frameBuffer->mAttachedDepthStencilTextureView->GetViewID().GetBufferID() : 0;
 
 			dooms::graphics::GraphicsAPI::BindFrameBuffer(renderTargetViewCount, reinterpret_cast<unsigned long long*>(renderTargetViewList), frameBuffer->GetAttachedColorTextureCount(), depthStencilView);
+
+			// Same check the OpenGL path above already makes. Without it a frame
+			// buffer that was default constructed binds a zero area viewport,
+			// and every draw into it is silently discarded while still counting
+			// as a draw call, which is a miserable thing to track down.
+			D_ASSERT(frameBuffer->mDefaultWidth != 0 && frameBuffer->mDefaultHeight != 0);
 			GraphicsAPI::SetViewport(0, 0, 0, frameBuffer->mDefaultWidth, frameBuffer->mDefaultHeight);
 		}
 		else
