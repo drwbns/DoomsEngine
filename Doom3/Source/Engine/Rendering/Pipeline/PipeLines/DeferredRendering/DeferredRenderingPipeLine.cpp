@@ -9,6 +9,11 @@
 #include "DeferredRenderingPipeLineCamera.h"
 #include <Graphics/graphicsSetting.h>
 #include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
+#include <PictureInPicture/PicktureInPickture.h>
+#include <Rendering/Material/Material.h>
+#include <Rendering/Texture/TextureView.h>
+#include <Asset/AssetManager/AssetManager.h>
+#include <Asset/ShaderAsset.h>
 
 dooms::graphics::DeferredRenderingPipeLine::DeferredRenderingPipeLine
 (
@@ -67,6 +72,59 @@ dooms::graphics::GraphicsPipeLineCamera* dooms::graphics::DeferredRenderingPipeL
 }
 
 
+
+void dooms::graphics::DeferredRenderingPipeLine::UpdateDepthBufferVisualization(dooms::Camera* const targetCamera)
+{
+	if (dooms::graphics::graphicsSetting::IsDepthBufferVisualizationEnabled == false)
+	{
+		if (IsValid(mDepthBufferPIP))
+		{
+			mDepthBufferPIP->bmIsDrawOnScreen = false;
+		}
+		return;
+	}
+
+	if (IsValid(mDepthBufferPIP) == false)
+	{
+		dooms::graphics::DeferredRenderingPipeLineCamera* const deferredRenderingPipeLineCamera
+			= CastTo<graphics::DeferredRenderingPipeLineCamera*>(targetCamera->GetGraphicsPipeLineCamera());
+
+		if (IsValid(deferredRenderingPipeLineCamera) == false)
+		{
+			return;
+		}
+
+		TextureView* const depthTextureView
+			= deferredRenderingPipeLineCamera->mDeferredRenderingFrameBuffer.GetDepthTextureView(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+
+		if (IsValid(depthTextureView) == false)
+		{
+			return;
+		}
+
+		mDepthBufferPIP = mGraphicsServer.mPIPManager.AddNewPIP(
+			math::Vector2(-1.0f, -1.0f),
+			math::Vector2(1.0f, 1.0f),
+			depthTextureView);
+		mDepthBufferPIP->AddToRootObjectList();
+
+		// The stock picture-in-picture material would show raw depth, which is
+		// so non linear that everything past the near plane reads as flat white.
+		// This one linearises against the camera planes first.
+		dooms::asset::ShaderAsset* const depthShader
+			= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("DepthBufferTextureShader.glsl");
+
+		D_ASSERT(IsValid(depthShader));
+		if (IsValid(depthShader))
+		{
+			mDepthBufferPresentMaterial = depthShader->CreateMatrialWithThisShaderAsset();
+			mDepthBufferPresentMaterial->AddToRootObjectList();
+			mDepthBufferPIP->SetMaterial(mDepthBufferPresentMaterial);
+		}
+	}
+
+	mDepthBufferPIP->bmIsDrawOnScreen = true;
+}
 
 void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* const targetCamera, const size_t cameraIndex)
 {
@@ -155,6 +213,10 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 			mDeferredRenderingDrawer.DrawDeferredRenderingQuadDrawer();
 			deferredRenderingPipeLineCamera->mDeferredRenderingFrameBuffer.UnBindGBufferTextures();
 		}
+
+		// Updated here because the depth attachment is only safe to sample once
+		// the g-buffer is unbound, which the back buffer bind above has done.
+		UpdateDepthBufferVisualization(targetCamera);
 
 		// After the lighting resolve, not before it. The resolve covers the
 		// whole back buffer, so anything drawn ahead of it was painted over --

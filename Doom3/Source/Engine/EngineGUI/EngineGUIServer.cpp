@@ -270,6 +270,7 @@ namespace
         { "Tile coverage",    &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingTileCoverageMaskDebugger },
         { "Tile depth",       &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingTileL0MaxDepthValueDebugger },
         { "Overdraw",         &dooms::graphics::graphicsSetting::IsOverDrawVisualizationEnabled },
+        { "Depth buffer",     &dooms::graphics::graphicsSetting::IsDepthBufferVisualizationEnabled },
         { "Renderer bounds",  &dooms::graphics::graphicsSetting::DrawRenderingBoundingBox }
     };
 
@@ -395,6 +396,11 @@ namespace
                 "Overdraw",
                 "how many times each pixel was shaded",
                 graphicsSetting::IsOverDrawVisualizationEnabled);
+
+            VisualisationToggle(
+                "Depth buffer",
+                "the camera depth buffer, linearised so it is readable",
+                graphicsSetting::IsDepthBufferVisualizationEnabled);
 
             VisualisationToggle(
                 "Renderer bounds",
