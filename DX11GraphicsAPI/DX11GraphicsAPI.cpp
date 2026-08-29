@@ -2023,6 +2023,98 @@ namespace dooms
             
         }
 
+        DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateStagingTexture2D
+        (
+            const unsigned int width,
+            const unsigned int height,
+            const GraphicsAPI::eTextureInternalFormat internalFormat
+        )
+        {
+            D3D11_TEXTURE2D_DESC textureDesc = {};
+            textureDesc.Width = width;
+            textureDesc.Height = height;
+            textureDesc.MipLevels = 1;
+            textureDesc.ArraySize = 1;
+            textureDesc.Format = dx11::ConvertTextureInternalFormat_To_DXGI_FORMAT(internalFormat);
+            textureDesc.SampleDesc.Count = 1;
+
+            // Staging means system memory the gpu can copy into and the cpu can
+            // map. It cannot be bound to the pipeline at all, which is why this
+            // is a separate texture rather than a flag on the real one.
+            textureDesc.Usage = D3D11_USAGE_STAGING;
+            textureDesc.BindFlags = 0;
+            textureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            textureDesc.MiscFlags = 0;
+
+            ID3D11Texture2D* stagingTexture = nullptr;
+
+            const HRESULT hr = dx11::g_pd3dDevice->CreateTexture2D(&textureDesc, nullptr, &stagingTexture);
+            assert(FAILED(hr) == false);
+
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            return reinterpret_cast<unsigned long long>(stagingTexture);
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void CopyTexture2DToStagingTexture
+        (
+            const unsigned long long stagingTexture,
+            const unsigned long long sourceTexture,
+            const unsigned int sourceMipLevel
+        )
+        {
+            assert(stagingTexture != 0 && sourceTexture != 0);
+
+            ID3D11Texture2D* const destination = reinterpret_cast<ID3D11Texture2D*>(stagingTexture);
+            ID3D11Texture2D* const source = reinterpret_cast<ID3D11Texture2D*>(sourceTexture);
+
+            // Subresource rather than whole resource, because the source may be
+            // one level of a mip chain and the destination never is.
+            dx11::g_pImmediateContext->CopySubresourceRegion(destination, 0, 0, 0, 0, source, sourceMipLevel, nullptr);
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void* MapTexture2DForRead
+        (
+            const unsigned long long stagingTexture,
+            const unsigned int bWaitForGPU,
+            unsigned int* const outRowPitch
+        )
+        {
+            assert(stagingTexture != 0);
+
+            ID3D11Texture2D* const texture = reinterpret_cast<ID3D11Texture2D*>(stagingTexture);
+
+            // DO_NOT_WAIT returns S_FALSE rather than stalling when the copy has
+            // not landed yet. Waiting would sync the cpu to the gpu every frame,
+            // which is the cost this whole arrangement exists to avoid.
+            const UINT mapFlags = (bWaitForGPU != 0) ? 0 : D3D11_MAP_FLAG_DO_NOT_WAIT;
+
+            D3D11_MAPPED_SUBRESOURCE mapped = {};
+            const HRESULT hr = dx11::g_pImmediateContext->Map(texture, 0, D3D11_MAP_READ, mapFlags, &mapped);
+
+            if (hr != S_OK)
+            {
+                return nullptr;
+            }
+
+            if (outRowPitch != nullptr)
+            {
+                *outRowPitch = mapped.RowPitch;
+            }
+
+            return mapped.pData;
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void UnMapTexture2D(const unsigned long long stagingTexture)
+        {
+            assert(stagingTexture != 0);
+
+            dx11::g_pImmediateContext->Unmap(reinterpret_cast<ID3D11Texture2D*>(stagingTexture), 0);
+        }
+
         DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateTextureViewObjectWithMipRange
         (
             const unsigned long long textureObject,

@@ -914,6 +914,37 @@ namespace dooms
 			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATETEXTUREVIEWOBJECTWITHMIPRANGE)(const unsigned long long textureObject, const unsigned int mostDetailedMip, const unsigned int mipLevelCount);
 			extern GRAPHICS_CREATETEXTUREVIEWOBJECTWITHMIPRANGE CreateTextureViewObjectWithMipRange;
 
+			/// <summary>
+			/// A texture the cpu can read, to copy gpu results back into.
+			///
+			/// Nothing produced on the gpu could be read back before this: the
+			/// only readback entry point asserted. Culling on the gpu needs it,
+			/// and so does timing anything the gpu does.
+			/// </summary>
+			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATESTAGINGTEXTURE2D)(const unsigned int width, const unsigned int height, const eTextureInternalFormat internalFormat);
+			extern GRAPHICS_CREATESTAGINGTEXTURE2D CreateStagingTexture2D;
+
+			/// <summary>
+			/// Copies one mip of a texture into a staging texture. The copy is
+			/// queued like any other command, so the data is only there once the
+			/// gpu has caught up.
+			/// </summary>
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_COPYTEXTURE2DTOSTAGINGTEXTURE)(const unsigned long long stagingTexture, const unsigned long long sourceTexture, const unsigned int sourceMipLevel);
+			extern GRAPHICS_COPYTEXTURE2DTOSTAGINGTEXTURE CopyTexture2DToStagingTexture;
+
+			/// <summary>
+			/// Maps a staging texture for reading. Returns null if the gpu has
+			/// not finished with it and waiting was declined.
+			///
+			/// outRowPitch receives the byte stride between rows, which is not
+			/// width times pixel size: the driver pads it.
+			/// </summary>
+			typedef void* (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_MAPTEXTURE2DFORREAD)(const unsigned long long stagingTexture, const unsigned int bWaitForGPU, unsigned int* const outRowPitch);
+			extern GRAPHICS_MAPTEXTURE2DFORREAD MapTexture2DForRead;
+
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_UNMAPTEXTURE2D)(const unsigned long long stagingTexture);
+			extern GRAPHICS_UNMAPTEXTURE2D UnMapTexture2D;
+
 			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_DESTROYTEXTUREVIEWOBJECT)(unsigned long long textureViewObject);
 			extern GRAPHICS_DESTROYTEXTUREVIEWOBJECT DestroyTextureViewObject;
 

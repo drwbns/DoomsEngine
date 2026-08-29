@@ -71,6 +71,24 @@ namespace dooms
 			class Material* mHiZPresentMaterial{ nullptr };
 			UINT32 mHiZLevelCount{ 0 };
 
+			// A cpu readable copy of one coarse level of the pyramid.
+			//
+			// Copied at the end of one frame and mapped at the start of a later
+			// one, never waited on. Reading it back in the frame that produced it
+			// would stall the cpu until the gpu had caught up, which costs more
+			// than any culling it could inform would save.
+			unsigned long long mHiZReadbackTexture{ 0 };
+			UINT32 mHiZReadbackLevel{ 0 };
+			UINT32 mHiZReadbackWidth{ 0 };
+			UINT32 mHiZReadbackHeight{ 0 };
+			bool bmIsHiZReadbackPending{ false };
+			UINT64 mHiZFrameCounter{ 0 };
+
+			/// <summary>
+			/// Takes last frame's copy if it has arrived, and queues this frame's.
+			/// </summary>
+			void ReadBackHiZLevel();
+
 			/// <summary>
 			/// Draws a quad covering the target with whatever material is bound.
 			/// The deferred drawer's own quad cannot be borrowed for this: it

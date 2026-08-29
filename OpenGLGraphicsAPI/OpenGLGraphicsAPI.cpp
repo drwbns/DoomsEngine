@@ -1940,6 +1940,46 @@ namespace dooms
 			return textureObject;
 		}
 
+		// Texture readback is not implemented on this backend.
+		//
+		// OpenGL has no staging texture: the equivalent is glGetTexImage into a
+		// pixel buffer object and fencing on it, which is a different shape from
+		// the copy-then-map these entry points describe. Rather than pretend,
+		// creation returns nothing and callers null check, which leaves them on
+		// the path they already take when the graphics DLL predates a feature.
+		DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateStagingTexture2D
+		(
+			const unsigned int width,
+			const unsigned int height,
+			const GraphicsAPI::eTextureInternalFormat internalFormat
+		)
+		{
+			return 0;
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API void CopyTexture2DToStagingTexture
+		(
+			const unsigned long long stagingTexture,
+			const unsigned long long sourceTexture,
+			const unsigned int sourceMipLevel
+		)
+		{
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API void* MapTexture2DForRead
+		(
+			const unsigned long long stagingTexture,
+			const unsigned int bWaitForGPU,
+			unsigned int* const outRowPitch
+		)
+		{
+			return nullptr;
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API void UnMapTexture2D(const unsigned long long stagingTexture)
+		{
+		}
+
 		DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateTextureViewObjectWithMipRange
 		(
 			const unsigned long long textureObject,

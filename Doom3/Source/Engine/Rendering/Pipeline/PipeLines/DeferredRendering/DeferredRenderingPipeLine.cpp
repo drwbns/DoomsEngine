@@ -255,6 +255,99 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 	GraphicsAPI::SetIsDepthTestEnabled(true);
 	GraphicsAPI::SetDepthMask(true);
 	FrameBuffer::StaticBindBackFrameBuffer();
+
+	ReadBackHiZLevel();
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
+{
+	if (GraphicsAPI::CreateStagingTexture2D == nullptr ||
+		GraphicsAPI::CopyTexture2DToStagingTexture == nullptr ||
+		GraphicsAPI::MapTexture2DForRead == nullptr ||
+		GraphicsAPI::UnMapTexture2D == nullptr)
+	{
+		return;
+	}
+
+	if (IsValid(mHiZTexture) == false)
+	{
+		return;
+	}
+
+	if (mHiZReadbackTexture == 0)
+	{
+		// A coarse level, so the copy is small and the map is cheap. Sixteen
+		// texels across is enough to see that real values are coming through
+		// while staying far away from the cost of reading back a whole screen.
+		mHiZReadbackLevel = 0;
+		while ((mHiZReadbackLevel + 1 < mHiZLevelCount) && (mHiZTexture->GetTextureWidth(mHiZReadbackLevel) > 16))
+		{
+			mHiZReadbackLevel++;
+		}
+
+		mHiZReadbackWidth = mHiZTexture->GetTextureWidth(mHiZReadbackLevel);
+		mHiZReadbackHeight = mHiZTexture->GetTextureHeight(mHiZReadbackLevel);
+
+		mHiZReadbackTexture = GraphicsAPI::CreateStagingTexture2D(
+			mHiZReadbackWidth,
+			mHiZReadbackHeight,
+			GraphicsAPI::eTextureInternalFormat::TEXTURE_INTERNAL_FORMAT_R32F);
+
+		if (mHiZReadbackTexture == 0)
+		{
+			return;
+		}
+	}
+
+	// Last frame's copy, if the gpu has finished with it. Never waited on: a
+	// frame or two of staleness is the price of not stalling.
+	if (bmIsHiZReadbackPending)
+	{
+		unsigned int rowPitchInBytes = 0;
+		const void* const mappedData = GraphicsAPI::MapTexture2DForRead(mHiZReadbackTexture, 0u, &rowPitchInBytes);
+
+		if (mappedData != nullptr)
+		{
+			FLOAT32 nearestDepth = 1.0f;
+			FLOAT32 farthestDepth = 0.0f;
+
+			for (UINT32 rowIndex = 0; rowIndex < mHiZReadbackHeight; rowIndex++)
+			{
+				const FLOAT32* const row = reinterpret_cast<const FLOAT32*>(
+					reinterpret_cast<const char*>(mappedData) + static_cast<size_t>(rowIndex) * rowPitchInBytes);
+
+				for (UINT32 columnIndex = 0; columnIndex < mHiZReadbackWidth; columnIndex++)
+				{
+					const FLOAT32 storedDepth = row[columnIndex];
+
+					nearestDepth = (storedDepth < nearestDepth) ? storedDepth : nearestDepth;
+					farthestDepth = (storedDepth > farthestDepth) ? storedDepth : farthestDepth;
+				}
+			}
+
+			GraphicsAPI::UnMapTexture2D(mHiZReadbackTexture);
+			bmIsHiZReadbackPending = false;
+
+			// Throttled, because this runs every frame once it is working.
+			if ((mHiZFrameCounter % 300) == 0)
+			{
+				D_RELEASE_LOG(eLogType::D_LOG, "HiZ readback : level %u, %u x %u, nearest %f, farthest %f",
+					mHiZReadbackLevel, mHiZReadbackWidth, mHiZReadbackHeight, nearestDepth, farthestDepth);
+			}
+		}
+	}
+
+	if (bmIsHiZReadbackPending == false)
+	{
+		GraphicsAPI::CopyTexture2DToStagingTexture(
+			mHiZReadbackTexture,
+			mHiZTexture->GetTextureResourceObject(),
+			mHiZReadbackLevel);
+
+		bmIsHiZReadbackPending = true;
+	}
+
+	mHiZFrameCounter++;
 }
 
 void dooms::graphics::DeferredRenderingPipeLine::UpdateHiZVisualization()

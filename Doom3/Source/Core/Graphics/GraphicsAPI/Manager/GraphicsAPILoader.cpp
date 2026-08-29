@@ -119,6 +119,10 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateTextureObject != nullptr);
 	dooms::graphics::GraphicsAPI::CreateTextureViewObject = (GraphicsAPI::GRAPHICS_CREATETEXTUREVIEWOBJECT)GetProcAddress(hModule, "CreateTextureViewObject");
 	dooms::graphics::GraphicsAPI::CreateTextureViewObjectWithMipRange = (GraphicsAPI::GRAPHICS_CREATETEXTUREVIEWOBJECTWITHMIPRANGE)GetProcAddress(hModule, "CreateTextureViewObjectWithMipRange");
+	dooms::graphics::GraphicsAPI::CreateStagingTexture2D = (GraphicsAPI::GRAPHICS_CREATESTAGINGTEXTURE2D)GetProcAddress(hModule, "CreateStagingTexture2D");
+	dooms::graphics::GraphicsAPI::CopyTexture2DToStagingTexture = (GraphicsAPI::GRAPHICS_COPYTEXTURE2DTOSTAGINGTEXTURE)GetProcAddress(hModule, "CopyTexture2DToStagingTexture");
+	dooms::graphics::GraphicsAPI::MapTexture2DForRead = (GraphicsAPI::GRAPHICS_MAPTEXTURE2DFORREAD)GetProcAddress(hModule, "MapTexture2DForRead");
+	dooms::graphics::GraphicsAPI::UnMapTexture2D = (GraphicsAPI::GRAPHICS_UNMAPTEXTURE2D)GetProcAddress(hModule, "UnMapTexture2D");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateTextureViewObject != nullptr);
 	dooms::graphics::GraphicsAPI::CreateVertexArrayObject = (GraphicsAPI::GRAPHICS_CREATEVERTEXARRAYOBJECT)GetProcAddress(hModule, "CreateVertexArrayObject");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateVertexArrayObject != nullptr);
