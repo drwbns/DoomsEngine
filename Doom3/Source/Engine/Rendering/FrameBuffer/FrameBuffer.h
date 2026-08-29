@@ -111,6 +111,22 @@ namespace dooms
 				UINT32 width, 
 				UINT32 height
 			);
+			/// <summary>
+			/// Attaches a texture this frame buffer does not own, at one level of
+			/// its mip chain.
+			///
+			/// AttachColorTextureToFrameBuffer always creates its own texture at
+			/// the top level, which cannot express a pyramid: every level of one
+			/// is a view onto the same texture. Rendering a chain means a frame
+			/// buffer per level, all pointing at the same resource.
+			/// </summary>
+			void AttachExistingColorTextureToFrameBuffer
+			(
+				UINT32 bindingPosition,
+				dooms::asset::TextureAsset* const texture,
+				UINT32 lodLevel
+			);
+
 			dooms::asset::TextureAsset* AttachDepthTextureToFrameBuffer
 			(
 				UINT32 width,

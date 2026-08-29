@@ -14,6 +14,12 @@ namespace dooms
 			extern inline bool IsDrawMaskedOcclusionCullingOcculderBoundingBoxDebugger{ false };
 			extern inline bool IsOverDrawVisualizationEnabled{ false };
 			extern inline bool IsDepthBufferVisualizationEnabled{ false };
+			extern inline bool IsHiZVisualizationEnabled{ false };
+
+			// Which level of the hierarchical depth pyramid the view shows.
+			// Stepped through with F9, so the chain can be inspected rather than
+			// assumed correct.
+			extern inline unsigned int HiZVisualizationLevel{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

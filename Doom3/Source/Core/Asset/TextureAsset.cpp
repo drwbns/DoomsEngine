@@ -22,24 +22,47 @@ dooms::asset::TextureAsset::TextureAsset
 	dooms::graphics::GraphicsAPI::eBindFlag resourceBindFlag,
 	dooms::graphics::GraphicsAPI::eTextureBindTarget textureBindTarget,
 	const void* data,
-	const size_t dataSize
+	const size_t dataSize,
+	UINT32 mipMapLevelCount
 )
 	:
 	mTargetTexture(targetTexture),
 	mScratchImage(),
-	mWidth(1, width),
-	mHeight(1, height),
-	mMipMapLevelCount(1),
+	mWidth(),
+	mHeight(),
+	mMipMapLevelCount(mipMapLevelCount),
 	mComponentFormat(format),
 	mInternalFormat(internalFormat),
 	mCompressedInternalFormat(compressedInternalFormat),
 	mTextureResourceObject(),
 	mDataType(dataType),
-	mTextureData( 1, data ),
+	mTextureData(),
 	mEntireImageSize(dataSize),
 	mBindFlags(resourceBindFlag),
 	mTextureBindTarget(textureBindTarget)
 {
+	D_ASSERT(mipMapLevelCount > 0);
+
+	// Each level halves, and never goes below a single texel. Allocation asserts
+	// that these are as long as the mip count, so they are filled even when
+	// there is only one level.
+	mWidth.reserve(mipMapLevelCount);
+	mHeight.reserve(mipMapLevelCount);
+
+	for (UINT32 mipLevelIndex = 0; mipLevelIndex < mipMapLevelCount; mipLevelIndex++)
+	{
+		const UINT32 levelWidth = width >> mipLevelIndex;
+		const UINT32 levelHeight = height >> mipLevelIndex;
+
+		mWidth.push_back((levelWidth > 0) ? levelWidth : 1);
+		mHeight.push_back((levelHeight > 0) ? levelHeight : 1);
+	}
+
+	// Only the top level can have pixels handed to it here. Lower levels of a
+	// chain are produced by rendering into them, not uploaded.
+	mTextureData.assign(mipMapLevelCount, nullptr);
+	mTextureData[0] = data;
+
 	AllocateTextureResourceObject();
 }
 

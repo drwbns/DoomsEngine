@@ -335,6 +335,7 @@ namespace
         { "Tile depth",       &dooms::graphics::graphicsSetting::IsDrawMaskedOcclusionCullingTileL0MaxDepthValueDebugger },
         { "Overdraw",         &dooms::graphics::graphicsSetting::IsOverDrawVisualizationEnabled },
         { "Depth buffer",     &dooms::graphics::graphicsSetting::IsDepthBufferVisualizationEnabled },
+        { "Hi-Z pyramid",    &dooms::graphics::graphicsSetting::IsHiZVisualizationEnabled },
         { "Renderer bounds",  &dooms::graphics::graphicsSetting::DrawRenderingBoundingBox }
     };
 
@@ -793,6 +794,19 @@ void dooms::ui::EngineGUIServer::Update()
 
         D_RELEASE_LOG(eLogType::D_LOG, "Culling : %s", gOcclusionModes[gOcclusionModeIndex].mName);
         ShowNotification("Culling: %s", gOcclusionModes[gOcclusionModeIndex].mName);
+    }
+
+    // F9 steps through the levels of the Hi-Z pyramid while its view is up.
+    //
+    // Wraps at 11, which covers a 1920 wide pyramid down to a single texel.
+    // Reading the real count would mean reaching into the pipeline for it, and
+    // sampling past the last level just clamps.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F9))
+    {
+        dooms::graphics::graphicsSetting::HiZVisualizationLevel =
+            (dooms::graphics::graphicsSetting::HiZVisualizationLevel + 1) % 11;
+
+        ShowNotification("Hi-Z level: %u", dooms::graphics::graphicsSetting::HiZVisualizationLevel);
     }
 
     // F8 steps through how the geometry is drawn.

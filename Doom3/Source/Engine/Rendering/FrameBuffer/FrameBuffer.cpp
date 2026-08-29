@@ -327,6 +327,36 @@ dooms::asset::TextureAsset* dooms::graphics::FrameBuffer::AttachColorTextureToFr
 	return colorTexture;
 }
 
+void dooms::graphics::FrameBuffer::AttachExistingColorTextureToFrameBuffer
+(
+	UINT32 bindingPosition,
+	dooms::asset::TextureAsset* const texture,
+	UINT32 lodLevel
+)
+{
+	D_ASSERT(IsValid(texture));
+	if (IsValid(texture) == false)
+	{
+		return;
+	}
+
+	if (mFrameBufferIDForOPENGL.IsValid() == false)
+	{
+		GenerateFrameBuffer();
+	}
+
+	const BufferID renderTargetViewObject = GraphicsAPI::Attach2DColorTextureToFrameBuffer
+	(
+		mFrameBufferIDForOPENGL,
+		static_cast<GraphicsAPI::eFrameBufferAttachmentPoint>(GraphicsAPI::eFrameBufferAttachmentPoint::FRAMEBUFFER_ATTACHMENT_POINT_COLOR_ATTACHMENT0 + bindingPosition),
+		GraphicsAPI::eTextureBindTarget::TEXTURE_2D,
+		texture->GetTextureResourceObject(),
+		lodLevel
+	);
+
+	mAttachedColorTextureViews.emplace_back(dooms::CreateDObject<FrameBufferView>(texture, renderTargetViewObject, bindingPosition));
+}
+
 dooms::asset::TextureAsset* dooms::graphics::FrameBuffer::AttachDepthTextureToFrameBuffer
 (
 	UINT32 width, 

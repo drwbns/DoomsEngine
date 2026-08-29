@@ -105,7 +105,12 @@ namespace dooms
 				dooms::graphics::GraphicsAPI::eBindFlag resourceBindFlag,
 				dooms::graphics::GraphicsAPI::eTextureBindTarget textureBindTarget,
 				const void* data = 0,
-				const size_t dataSize = 0
+				const size_t dataSize = 0,
+
+				// Levels in the mip chain, each half the size of the one above.
+				// One means no chain, which is what every existing caller wants
+				// and gets by leaving this alone.
+				UINT32 mipMapLevelCount = 1
 			);
 			TextureAsset(std::unique_ptr<DirectX::ScratchImage>&& scratchImage, const dooms::graphics::GraphicsAPI::eBindFlag resourceBindFlag);
 			void SetScratchImage(std::unique_ptr<DirectX::ScratchImage>&& scratchImage, const dooms::graphics::GraphicsAPI::eBindFlag resourceBindFlag);

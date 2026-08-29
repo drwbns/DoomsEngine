@@ -14,6 +14,9 @@
 #include <Rendering/Texture/TextureView.h>
 #include <Asset/AssetManager/AssetManager.h>
 #include <Asset/ShaderAsset.h>
+#include <Asset/TextureAsset.h>
+#include <Rendering/Buffer/MeshHelper.h>
+#include <Rendering/Buffer/UniformBufferObject/UniformBufferObjectView.h>
 
 dooms::graphics::DeferredRenderingPipeLine::DeferredRenderingPipeLine
 (
@@ -72,6 +75,224 @@ dooms::graphics::GraphicsPipeLineCamera* dooms::graphics::DeferredRenderingPipeL
 }
 
 
+
+void dooms::graphics::DeferredRenderingPipeLine::DrawHiZQuad()
+{
+	if (mHiZQuadMesh == nullptr)
+	{
+		mHiZQuadMesh = meshHelper::GetQuadMesh(
+			math::Vector2(-1.0f, -1.0f),
+			math::Vector2(1.0f, 1.0f),
+			meshHelper::GetFlipOptionBasedOnCurrentGraphicsAPI());
+	}
+
+	if (IsValid(mHiZQuadMesh))
+	{
+		mHiZQuadMesh->Draw();
+	}
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* const targetCamera)
+{
+	dooms::graphics::DeferredRenderingPipeLineCamera* const deferredRenderingPipeLineCamera
+		= CastTo<graphics::DeferredRenderingPipeLineCamera*>(targetCamera->GetGraphicsPipeLineCamera());
+
+	if (IsValid(deferredRenderingPipeLineCamera) == false)
+	{
+		return;
+	}
+
+	DefferedRenderingFrameBuffer& gBuffer = deferredRenderingPipeLineCamera->mDeferredRenderingFrameBuffer;
+
+	if (IsValid(mHiZTexture) == false)
+	{
+		const UINT32 width = gBuffer.GetDefaultWidth();
+		const UINT32 height = gBuffer.GetDefaultHeight();
+
+		if (width == 0 || height == 0)
+		{
+			return;
+		}
+
+		// Levels down to a single texel, so the coarsest one summarises the
+		// whole screen and a test against a large object need only read it.
+		mHiZLevelCount = 1;
+		for (UINT32 size = (width > height) ? width : height; size > 1; size >>= 1)
+		{
+			mHiZLevelCount++;
+		}
+
+		mHiZTexture = dooms::CreateDObject<dooms::asset::TextureAsset>
+		(
+			GraphicsAPI::eTargetTexture::TARGET_TEXTURE_TEXTURE_2D,
+			GraphicsAPI::eTextureInternalFormat::TEXTURE_INTERNAL_FORMAT_R32F,
+			GraphicsAPI::eTextureCompressedInternalFormat::TEXTURE_COMPRESSED_INTERNAL_FORMAT_NONE,
+			width,
+			height,
+			GraphicsAPI::eTextureComponentFormat::TEXTURE_COMPONENT_RED,
+			GraphicsAPI::eDataType::FLOAT,
+			(GraphicsAPI::eBindFlag)(GraphicsAPI::eBindFlag::BIND_RENDER_TARGET | GraphicsAPI::eBindFlag::BIND_SHADER_RESOURCE),
+			GraphicsAPI::eTextureBindTarget::TEXTURE_2D,
+			nullptr,
+			0,
+			mHiZLevelCount
+		);
+		mHiZTexture->AddToRootObjectList();
+
+		mHiZFrameBuffers.reserve(mHiZLevelCount);
+		for (UINT32 levelIndex = 0; levelIndex < mHiZLevelCount; levelIndex++)
+		{
+			const UINT32 levelWidth = mHiZTexture->GetTextureWidth(levelIndex);
+			const UINT32 levelHeight = mHiZTexture->GetTextureHeight(levelIndex);
+
+			// Sized, because binding a frame buffer takes the viewport from
+			// these and a zero one silently discards every draw.
+			FrameBuffer* const levelFrameBuffer = dooms::CreateDObject<FrameBuffer>(levelWidth, levelHeight);
+			levelFrameBuffer->AttachExistingColorTextureToFrameBuffer(0, mHiZTexture, levelIndex);
+			levelFrameBuffer->AddToRootObjectList();
+
+			mHiZFrameBuffers.push_back(levelFrameBuffer);
+		}
+
+		dooms::asset::ShaderAsset* const copyShader
+			= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("HiZCopyShader.glsl");
+		dooms::asset::ShaderAsset* const downsampleShader
+			= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("HiZDownsampleShader.glsl");
+
+		D_ASSERT(IsValid(copyShader) && IsValid(downsampleShader));
+		if (IsValid(copyShader) == false || IsValid(downsampleShader) == false)
+		{
+			return;
+		}
+
+		mHiZCopyMaterial = copyShader->CreateMatrialWithThisShaderAsset();
+		mHiZCopyMaterial->AddToRootObjectList();
+
+		mHiZDownsampleMaterial = downsampleShader->CreateMatrialWithThisShaderAsset();
+		mHiZDownsampleMaterial->AddToRootObjectList();
+
+		D_RELEASE_LOG(eLogType::D_LOG, "HiZ : pyramid built, %u x %u, %u levels", width, height, mHiZLevelCount);
+	}
+
+	if (IsValid(mHiZCopyMaterial) == false || IsValid(mHiZDownsampleMaterial) == false)
+	{
+		return;
+	}
+
+	// The pyramid is written, never blended or depth tested.
+	GraphicsAPI::SetIsBlendEnabled(false);
+	GraphicsAPI::SetIsDepthTestEnabled(false);
+	GraphicsAPI::SetDepthMask(false);
+
+	TextureView* const depthTextureView
+		= gBuffer.GetDepthTextureView(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+
+	if (IsValid(depthTextureView))
+	{
+		mHiZFrameBuffers[0]->BindFrameBuffer();
+		mHiZCopyMaterial->BindMaterial();
+		depthTextureView->BindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+
+		DrawHiZQuad();
+
+		depthTextureView->UnBindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+	}
+
+	TextureView* const hiZTextureView = mHiZTexture->GenerateTextureView(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+
+	if (IsValid(hiZTextureView))
+	{
+		UniformBufferObjectView* const hiZDataView = mHiZDownsampleMaterial->GetUniformBufferObjectViewFromUBOName("HiZData");
+
+		for (UINT32 levelIndex = 1; levelIndex < mHiZLevelCount; levelIndex++)
+		{
+			const UINT32 sourceLevel = levelIndex - 1;
+
+			mHiZFrameBuffers[levelIndex]->BindFrameBuffer();
+			mHiZDownsampleMaterial->BindMaterial();
+
+			if (hiZDataView != nullptr)
+			{
+				hiZDataView->SetVector4((UINT64)0, math::Vector4(
+					static_cast<FLOAT32>(sourceLevel),
+					1.0f / static_cast<FLOAT32>(mHiZTexture->GetTextureWidth(sourceLevel)),
+					1.0f / static_cast<FLOAT32>(mHiZTexture->GetTextureHeight(sourceLevel)),
+					0.0f));
+			}
+
+			// Reading the level above while writing the one below. They are
+			// different mips of the same texture, which D3D11 allows only
+			// because the views do not overlap.
+			hiZTextureView->BindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+
+			DrawHiZQuad();
+
+			hiZTextureView->UnBindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+		}
+	}
+
+	GraphicsAPI::SetIsDepthTestEnabled(true);
+	GraphicsAPI::SetDepthMask(true);
+	FrameBuffer::StaticBindBackFrameBuffer();
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::UpdateHiZVisualization()
+{
+	if (dooms::graphics::graphicsSetting::IsHiZVisualizationEnabled == false)
+	{
+		if (IsValid(mHiZPIP))
+		{
+			mHiZPIP->bmIsDrawOnScreen = false;
+		}
+		return;
+	}
+
+	if (IsValid(mHiZPIP) == false)
+	{
+		if (IsValid(mHiZTexture) == false)
+		{
+			return;
+		}
+
+		mHiZPIP = CreateFullscreenPIP(mHiZTexture->GenerateTextureView(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER));
+
+		if (IsValid(mHiZPIP) == false)
+		{
+			return;
+		}
+
+		// The stock material samples without naming a level and shows raw depth,
+		// which came out as a flat red field: the values all sit against one and
+		// the hardware picks the level. This one takes the level explicitly and
+		// puts it through the same ramp as the depth view, so a level of the
+		// pyramid can be compared against the buffer it came from.
+		dooms::asset::ShaderAsset* const presentShader
+			= dooms::assetImporter::AssetManager::GetSingleton()->GetAsset<dooms::asset::eAssetType::SHADER>("HiZPresentShader.glsl");
+
+		D_ASSERT(IsValid(presentShader));
+		if (IsValid(presentShader))
+		{
+			mHiZPresentMaterial = presentShader->CreateMatrialWithThisShaderAsset();
+			mHiZPresentMaterial->AddToRootObjectList();
+			mHiZPIP->SetMaterial(mHiZPresentMaterial);
+		}
+	}
+
+	// Set every frame, because the level being inspected can change.
+	if (IsValid(mHiZPresentMaterial))
+	{
+		UniformBufferObjectView* const presentDataView
+			= mHiZPresentMaterial->GetUniformBufferObjectViewFromUBOName("HiZPresentData");
+
+		if (presentDataView != nullptr)
+		{
+			presentDataView->SetVector4((UINT64)0, math::Vector4(
+				static_cast<FLOAT32>(graphicsSetting::HiZVisualizationLevel), 0.0f, 0.0f, 0.0f));
+		}
+	}
+
+	mHiZPIP->bmIsDrawOnScreen = true;
+}
 
 dooms::graphics::PicktureInPickture* dooms::graphics::DeferredRenderingPipeLine::CreateFullscreenPIP(TextureView* const textureView)
 {
@@ -279,8 +500,16 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		}
 	}
 
+	// After the geometry pass, so the depth buffer it reads is complete, and
+	// before the lighting resolve, so anything that comes to depend on the
+	// pyramid can have it within the same frame.
+	if (targetCamera->IsMainCamera() == true)
+	{
+		BuildHiZPyramid(targetCamera);
+	}
+
 	FrameBuffer::StaticBindBackFrameBuffer();
-	
+
 	if (targetCamera->IsMainCamera() == true)
 	{
 		//Only Main Camera can draw to screen buffer
@@ -297,6 +526,7 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		// the g-buffer is unbound, which the back buffer bind above has done.
 		UpdateDepthBufferVisualization(targetCamera);
 		UpdateAlbedoVisualization(targetCamera);
+		UpdateHiZVisualization();
 
 		// After the lighting resolve, not before it. The resolve covers the
 		// whole back buffer, so anything drawn ahead of it was painted over --
