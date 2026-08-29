@@ -113,6 +113,17 @@ void dooms::graphics::PicktureInPickture::DrawPictureInPicture()
 
 			mPlaneMesh->Draw();
 
+			if (IsValid(mDrawedTexture))
+			{
+				// Released rather than left bound, because the texture shown
+				// here is usually the colour attachment of a frame buffer that
+				// is rendered into again next frame. D3D11 will not have the
+				// same resource bound as a shader resource and a render target
+				// at once: it drops the render target binding and carries on, so
+				// the next frame's pass draws into nothing and the view goes
+				// black from the second frame onwards.
+				mDrawedTexture->UnBindTexture(0, GraphicsAPI::eGraphicsPipeLineStage::PIXEL_SHADER);
+			}
 		}
 		else
 		{
