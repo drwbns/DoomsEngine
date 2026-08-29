@@ -26,6 +26,7 @@ namespace dooms
 		private:
 
 			bool bmIsOverDrawVisualizationInitialized{ false };
+			bool bmIsFirstPassReported{ false };
 			dooms::graphics::Material* mOverDrawVisualizationObjectDrawMaterial{ nullptr };
 			dooms::graphics::Material* mOverDrawVisualizationPresentMaterial{ nullptr };
 			dooms::graphics::FrameBuffer* mOverDrawVisualizationFrameBuffer{ nullptr };

@@ -107,24 +107,39 @@ void dooms::graphics::DebugPrimitiveContainer::BuildSpecialColorBatches()
 
 	// Batches are created in first-seen order so that what ends up on screen
 	// stays stable from frame to frame rather than shuffling with the hashing.
-	std::unordered_map<UINT32, size_t> batchIndexFromColorKey;
-	std::vector<std::vector<UINT32>> primitiveIndicesPerBatch;
+	//
+	// The scratch containers are members and are only cleared, never freed, so
+	// that a screen full of tiles does not re-allocate every frame. That cost is
+	// invisible in a release build and very much not in a debug one, which is
+	// where this gets looked at.
+	mBatchIndexFromColorKey.clear();
+	for (std::vector<UINT32>& primitiveIndices : mPrimitiveIndicesPerBatch)
+	{
+		primitiveIndices.clear();
+	}
 
 	for (size_t primitiveIndex = 0; primitiveIndex < primitiveCount; primitiveIndex++)
 	{
 		const UINT32 colorKey = PackColorKey(mSpecialColorData[primitiveIndex]);
-		const auto foundBatch = batchIndexFromColorKey.find(colorKey);
+		const auto foundBatch = mBatchIndexFromColorKey.find(colorKey);
 
-		if (foundBatch == batchIndexFromColorKey.cend())
+		if (foundBatch == mBatchIndexFromColorKey.cend())
 		{
-			batchIndexFromColorKey.emplace(colorKey, mSpecialColorBatches.size());
+			const size_t batchIndex = mSpecialColorBatches.size();
+
+			mBatchIndexFromColorKey.emplace(colorKey, batchIndex);
 			mSpecialColorBatches.push_back(SpecialColorBatch{ mSpecialColorData[primitiveIndex], 0 });
-			primitiveIndicesPerBatch.emplace_back();
-			primitiveIndicesPerBatch.back().push_back(static_cast<UINT32>(primitiveIndex));
+
+			if (mPrimitiveIndicesPerBatch.size() <= batchIndex)
+			{
+				mPrimitiveIndicesPerBatch.resize(batchIndex + 1);
+			}
+
+			mPrimitiveIndicesPerBatch[batchIndex].push_back(static_cast<UINT32>(primitiveIndex));
 		}
 		else
 		{
-			primitiveIndicesPerBatch[foundBatch->second].push_back(static_cast<UINT32>(primitiveIndex));
+			mPrimitiveIndicesPerBatch[foundBatch->second].push_back(static_cast<UINT32>(primitiveIndex));
 		}
 	}
 
@@ -133,7 +148,7 @@ void dooms::graphics::DebugPrimitiveContainer::BuildSpecialColorBatches()
 	size_t writtenComponentCount = 0;
 	for (size_t batchIndex = 0; batchIndex < mSpecialColorBatches.size(); batchIndex++)
 	{
-		const std::vector<UINT32>& primitiveIndices = primitiveIndicesPerBatch[batchIndex];
+		const std::vector<UINT32>& primitiveIndices = mPrimitiveIndicesPerBatch[batchIndex];
 
 		for (const UINT32 primitiveIndex : primitiveIndices)
 		{

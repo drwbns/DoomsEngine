@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <array>
+#include <unordered_map>
 
 #include <Vector3.h>
 #include <Vector4.h>
@@ -45,6 +46,12 @@ namespace dooms
 			std::vector<float> mBatchedSpecialColoredVertexData;
 			std::vector<SpecialColorBatch> mSpecialColorBatches;
 			bool bmIsSpecialColorBatchesBuilt = false;
+
+			// Scratch for BuildSpecialColorBatches, kept between frames so that
+			// grouping tens of thousands of primitives does not allocate every
+			// frame. Cleared, never shrunk.
+			std::unordered_map<UINT32, size_t> mBatchIndexFromColorKey;
+			std::vector<std::vector<UINT32>> mPrimitiveIndicesPerBatch;
 
 
 

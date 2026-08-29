@@ -636,7 +636,13 @@ void dooms::ui::EngineGUIServer::Update()
     // F1 and back in through F2, F3 or F4 used to leave the cursor hidden and
     // captured with the panels plainly visible, and nothing put it back.
     {
-        const bool bShouldMouseLook = (enginePanel::GetDisplayMode() == eEngineGUIDisplayMode::Hidden);
+        // The overlay counts as looking around, not as using the interface. It
+        // is a heads up display: you read it while flying, and there is nothing
+        // on it to click, so taking the cursor back would only stop the camera.
+        const eEngineGUIDisplayMode displayMode = enginePanel::GetDisplayMode();
+        const bool bShouldMouseLook =
+            (displayMode == eEngineGUIDisplayMode::Hidden) ||
+            (displayMode == eEngineGUIDisplayMode::FocusedOverlay);
 
         // Only on a change: the setter reaches through to the graphics DLL to
         // switch the mouse into relative mode.

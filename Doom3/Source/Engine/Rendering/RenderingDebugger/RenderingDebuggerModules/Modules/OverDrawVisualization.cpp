@@ -138,6 +138,25 @@ void dooms::graphics::OverDrawVisualization::EndOverDrawPass()
 	SetOverDrawVisualizationRenderingState(false);
 
 	ShowOverDrawVisualizationPIP(true);
+
+	// Reported once, because neither half of this path had ever run before:
+	// the depth pre-pass that would otherwise exercise FixedMaterial is
+	// disabled, and no picture-in-picture was visible until the draw order was
+	// corrected. If overdraw comes out blank, this says which half to suspect.
+	if (bmIsFirstPassReported == false)
+	{
+		bmIsFirstPassReported = true;
+
+		D_RELEASE_LOG
+		(
+			eLogType::D_LOG,
+			"OverDraw : pass ran, frame buffer %d x %d, fixed material %s, PIP material %s",
+			static_cast<INT32>(graphicsAPISetting::GetScreenWidth()),
+			static_cast<INT32>(graphicsAPISetting::GetScreenHeight()),
+			IsValid(mOverDrawVisualizationObjectDrawMaterial) ? "valid" : "MISSING",
+			IsValid(mOverDrawVisualizationPresentMaterial) ? "valid" : "MISSING"
+		);
+	}
 }
 
 void dooms::graphics::OverDrawVisualization::HideOverDrawVisualization()
