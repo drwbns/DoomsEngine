@@ -122,9 +122,58 @@ Reference implementations already in this workspace:
 The harness works when you can:
 
 1. Load a scene, pick two culling methods, and switch between them at runtime.
+   — **done.** F7 cycles None / Frustum / Frustum + SW occlusion / Frustum + Hi-Z,
+   with distance culling as an independent toggle so the modes stay comparable.
 2. Read per-method timing and cull counts side by side.
+   — **done.** The draw call overlay shows objects drawn and culled, per module
+   CPU time, and GPU time for the Hi-Z build.
 3. See visually *why* a method culled what it did.
+   — **done.** F6 cycles occluder bounds, binned triangles, tile coverage, tile
+   depth, overdraw, depth buffer, and the Hi-Z pyramid with F9 stepping levels.
 4. Trust the numbers, because the math underneath has tests.
+   — **not done.** `unit_tests` still has no source files. What stands in for it
+   so far is F5 freezing the scene, and checking that two culling modes render
+   an identical frame, which is how the flipped V that made Hi-Z cull visible
+   geometry was caught.
+
+## What the harness has actually shown
+
+Measured on one frozen frame of 5806 objects, both modes verified to render
+identical images:
+
+| | culled | draws | culling cost |
+| --- | --- | --- | --- |
+| Frustum + SW occlusion | 3619 | 2199 | 0.76 ms cpu |
+| Frustum + Hi-Z | 3760 | 2058 | 0.22 ms cpu + 0.11 ms gpu |
+
+Hi-Z removes more and costs roughly a third of the CPU.
+
+**The occluder gate does not explain the gap.** The obvious theory was that the
+software culler loses because `config.ini` only lets huge, near objects be
+occluders. Widening both gates — area 300000 to 10000, distance 80 to 500 —
+moved it from 3480 to 3565 culled while `RasterizeOccludersStage` went from
+0.61 ms to 1.19 ms. It buys 85 objects for double the cost, and still trails
+Hi-Z's 3665 at a fifth of it.
+
+The real difference is where the occluder information comes from. The software
+culler has to rasterise occluders, so a wider occluder set costs it linearly.
+Hi-Z reads the depth buffer the frame already produced, where every drawn object
+occludes and the information was free.
+
+## Next
+
+1. **Hierarchical culling over the existing BVH.** `BVH.cpp` is built and
+   maintained every frame — physics uses it, culling never references it, and the
+   renderer's BVH visibility check is commented out. Meanwhile PreCulling is now
+   the most expensive stage at ~0.48 ms, touching all 5806 objects unconditionally
+   in every mode. This is the one change that would improve every mode rather than
+   adding another to compare.
+2. **Tests around the culling math**, per phase 5 below. The V flip was caught by
+   eye, and only because the artefact happened to be in open sky.
+3. **Two-phase occlusion culling.** The principled fix for the staleness that the
+   current implementation covers with a one cell margin.
+4. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
+   unordered access views and indirect draw, none of which the backend has.
 
 ## Deliberately out of scope
 
