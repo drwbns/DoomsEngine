@@ -470,6 +470,17 @@ namespace
             ImGui::TextDisabled("F6 cycles: %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
             ImGui::TextDisabled("F7 culling: %s", gOcclusionModes[gOcclusionModeIndex].mName);
 
+            // What the selected mode is actually worth. Draw calls move for
+            // reasons that have nothing to do with culling, so the number that
+            // compares two modes is how many objects each one removes.
+            {
+                const unsigned int entityCount = graphicsSetting::CullStatEntityCount;
+                const unsigned int culledCount = graphicsSetting::CullStatCulledCount;
+                const unsigned int drawnCount = (entityCount >= culledCount) ? (entityCount - culledCount) : 0u;
+
+                ImGui::TextDisabled("Objects: %u drawn / %u culled / %u total", drawnCount, culledCount, entityCount);
+            }
+
             // Sits with the culling readouts rather than the visualisation
             // toggles, because it changes what is drawn, not how it is shown.
             if (ImGui::Checkbox("Distance culling", &gIsDistanceCullingEnabled))

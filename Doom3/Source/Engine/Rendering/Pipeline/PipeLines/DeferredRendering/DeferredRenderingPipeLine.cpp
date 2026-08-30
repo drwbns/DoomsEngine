@@ -502,6 +502,44 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 	}
 }
 
+void dooms::graphics::DeferredRenderingPipeLine::UpdateCullStatistics(const size_t cameraIndex)
+{
+	culling::EveryCulling* const cullingSystem = mRenderingCullingManager.mCullingSystem.get();
+	if (cullingSystem == nullptr)
+	{
+		return;
+	}
+
+	UINT32 entityCount = 0;
+	UINT32 culledCount = 0;
+
+	for (culling::EntityBlock* const entityBlock : cullingSystem->GetActiveEntityBlockList())
+	{
+		if (entityBlock == nullptr)
+		{
+			continue;
+		}
+
+		for (size_t entityIndex = 0; entityIndex < entityBlock->mCurrentEntityCount; entityIndex++)
+		{
+			if (entityBlock->GetIsObjectEnabled(entityIndex) == false)
+			{
+				continue;
+			}
+
+			entityCount++;
+
+			if (entityBlock->GetIsCulled(entityIndex, cameraIndex) == true)
+			{
+				culledCount++;
+			}
+		}
+	}
+
+	dooms::graphics::graphicsSetting::CullStatEntityCount = entityCount;
+	dooms::graphics::graphicsSetting::CullStatCulledCount = culledCount;
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::UpdateHiZVisualization()
 {
 	if (dooms::graphics::graphicsSetting::IsHiZVisualizationEnabled == false)
@@ -686,6 +724,7 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	// data it reads is from an earlier frame, which is the point: waiting for
 	// this frame's pyramid would stall the cpu on the gpu.
 	ApplyHiZOcclusionCulling(cameraIndex);
+	UpdateCullStatistics(cameraIndex);
 
 	if (dooms::graphics::graphicsSetting::IsSortObjectFrontToBack == true)
 	{

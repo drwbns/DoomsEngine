@@ -24,6 +24,13 @@ namespace dooms
 			// Whether the Hi-Z test actually culls, as opposed to only reporting
 			// what it would cull. Driven by the F7 cycle.
 			extern inline bool IsHiZOcclusionCullingEnabled{ false };
+
+			// Written by the pipeline once culling has finished, read by the
+			// interface. What a culling mode is worth is the number of objects it
+			// removes, and until now that had to be inferred from the draw call
+			// count, which moves for other reasons too.
+			extern inline unsigned int CullStatEntityCount{ 0 };
+			extern inline unsigned int CullStatCulledCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

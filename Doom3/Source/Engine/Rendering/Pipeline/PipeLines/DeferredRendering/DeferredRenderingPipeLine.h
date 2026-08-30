@@ -107,6 +107,16 @@ namespace dooms
 			void ApplyHiZOcclusionCulling(const size_t cameraIndex);
 
 			/// <summary>
+			/// Counts what survived culling, whichever techniques were involved.
+			///
+			/// Runs after every culling module and after the Hi-Z pass, so it sees
+			/// the final set. Deliberately technique agnostic: the number that
+			/// makes two modes comparable is how many objects are left, not how
+			/// each one arrived at that.
+			/// </summary>
+			void UpdateCullStatistics(const size_t cameraIndex);
+
+			/// <summary>
 			/// Draws a quad covering the target with whatever material is bound.
 			/// The deferred drawer's own quad cannot be borrowed for this: it
 			/// binds its own material before drawing.
