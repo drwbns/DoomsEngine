@@ -99,7 +99,7 @@ void dooms::graphics::DeferredRenderingPipeLine::DrawHiZQuad()
 	}
 }
 
-void dooms::graphics::DeferredRenderingPipeLine::BeginHiZGpuTimer()
+void dooms::graphics::DeferredRenderingPipeLine::BeginGpuTimer(GpuTimerRing& gpuTimerRing, FLOAT32& destinationMilliseconds)
 {
 	if (GraphicsAPI::CreateQuery == nullptr || GraphicsAPI::BeginQuery == nullptr ||
 		GraphicsAPI::EndQuery == nullptr || GraphicsAPI::GetQueryResult == nullptr)
@@ -107,22 +107,22 @@ void dooms::graphics::DeferredRenderingPipeLine::BeginHiZGpuTimer()
 		return;
 	}
 
-	if (bmAreGpuTimersCreated == false)
+	if (gpuTimerRing.bmAreQueriesCreated == false)
 	{
 		for (UINT32 frameIndex = 0; frameIndex < GPU_TIMER_FRAME_COUNT; frameIndex++)
 		{
-			mHiZGpuTimers[frameIndex].mDisjointQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP_DISJOINT);
-			mHiZGpuTimers[frameIndex].mStartQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP);
-			mHiZGpuTimers[frameIndex].mEndQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP);
+			gpuTimerRing.mFrames[frameIndex].mDisjointQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP_DISJOINT);
+			gpuTimerRing.mFrames[frameIndex].mStartQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP);
+			gpuTimerRing.mFrames[frameIndex].mEndQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP);
 		}
 
-		bmAreGpuTimersCreated = true;
+		gpuTimerRing.bmAreQueriesCreated = true;
 	}
 
 	// Collect the oldest one first. Going round the ring means this is the
 	// frame furthest from the one about to be issued, so it has had the most
 	// time to finish.
-	GpuTimerFrame& oldestTimer = mHiZGpuTimers[(mHiZGpuTimerIndex + 1) % GPU_TIMER_FRAME_COUNT];
+	GpuTimerFrame& oldestTimer = gpuTimerRing.mFrames[(gpuTimerRing.mFrameIndex + 1) % GPU_TIMER_FRAME_COUNT];
 
 	if (oldestTimer.bmIsPending && oldestTimer.mDisjointQuery != 0)
 	{
@@ -143,7 +143,7 @@ void dooms::graphics::DeferredRenderingPipeLine::BeginHiZGpuTimer()
 			// correct thing to do is drop the measurement.
 			if (bHasBothTimestamps && (bIsDisjoint == 0) && (frequency > 0) && (endTicks >= startTicks))
 			{
-				graphicsSetting::GpuStatHiZBuildMilliseconds =
+				destinationMilliseconds =
 					static_cast<FLOAT32>(static_cast<double>(endTicks - startTicks) * 1000.0 / static_cast<double>(frequency));
 			}
 
@@ -151,7 +151,7 @@ void dooms::graphics::DeferredRenderingPipeLine::BeginHiZGpuTimer()
 		}
 	}
 
-	GpuTimerFrame& currentTimer = mHiZGpuTimers[mHiZGpuTimerIndex];
+	GpuTimerFrame& currentTimer = gpuTimerRing.mFrames[gpuTimerRing.mFrameIndex];
 
 	if (currentTimer.mDisjointQuery != 0 && currentTimer.bmIsPending == false)
 	{
@@ -160,14 +160,14 @@ void dooms::graphics::DeferredRenderingPipeLine::BeginHiZGpuTimer()
 	}
 }
 
-void dooms::graphics::DeferredRenderingPipeLine::EndHiZGpuTimer()
+void dooms::graphics::DeferredRenderingPipeLine::EndGpuTimer(GpuTimerRing& gpuTimerRing)
 {
-	if (GraphicsAPI::EndQuery == nullptr || bmAreGpuTimersCreated == false)
+	if (GraphicsAPI::EndQuery == nullptr || gpuTimerRing.bmAreQueriesCreated == false)
 	{
 		return;
 	}
 
-	GpuTimerFrame& currentTimer = mHiZGpuTimers[mHiZGpuTimerIndex];
+	GpuTimerFrame& currentTimer = gpuTimerRing.mFrames[gpuTimerRing.mFrameIndex];
 
 	if (currentTimer.mDisjointQuery != 0 && currentTimer.bmIsPending == false)
 	{
@@ -177,7 +177,7 @@ void dooms::graphics::DeferredRenderingPipeLine::EndHiZGpuTimer()
 		currentTimer.bmIsPending = true;
 	}
 
-	mHiZGpuTimerIndex = (mHiZGpuTimerIndex + 1) % GPU_TIMER_FRAME_COUNT;
+	gpuTimerRing.mFrameIndex = (gpuTimerRing.mFrameIndex + 1) % GPU_TIMER_FRAME_COUNT;
 }
 
 void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* const targetCamera)
@@ -267,7 +267,7 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 		return;
 	}
 
-	BeginHiZGpuTimer();
+	BeginGpuTimer(mHiZGpuTimer, graphicsSetting::GpuStatHiZBuildMilliseconds);
 
 	// The pyramid is written, never blended or depth tested.
 	GraphicsAPI::SetIsBlendEnabled(false);
@@ -346,7 +346,7 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 	GraphicsAPI::SetDepthMask(true);
 	FrameBuffer::StaticBindBackFrameBuffer();
 
-	EndHiZGpuTimer();
+	EndGpuTimer(mHiZGpuTimer);
 
 	ReadBackHiZLevel();
 }
@@ -1042,12 +1042,22 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		//dooms::graphics::graphicsAPISetting::DepthPrePassType == dooms::graphics::eDepthPrePassType::ConsiderBound
 	)
 	{
+		// Timed separately from the pass it exists to speed up, because the
+		// whole question is whether what it saves there is worth what it costs
+		// here.
+		BeginGpuTimer(mDepthPrePassGpuTimer, graphicsSetting::GpuStatDepthPrePassMilliseconds);
 		DrawRenderersWithDepthOnly(targetCamera, cameraIndex);
+		EndGpuTimer(mDepthPrePassGpuTimer);
+	}
+	else
+	{
+		graphicsSetting::GpuStatDepthPrePassMilliseconds = 0.0f;
 	}
 	
 
 	{
 		D_START_PROFILING(RenderObject, dooms::profiler::eProfileLayers::Rendering);
+		BeginGpuTimer(mGeometryPassGpuTimer, graphicsSetting::GpuStatGeometryPassMilliseconds);
 		GraphicsAPI::SetIsDepthTestEnabled(true);
 		GraphicsAPI::SetDepthMask(true);
 		GraphicsAPI::SetDepthFunc(GraphicsAPI::eTestFuncType::LEQUAL);
@@ -1074,6 +1084,8 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 		{
 			GraphicsAPI::SetFillMode(GraphicsAPI::eFillMode::FILLMODE_SOLID);
 		}
+
+		EndGpuTimer(mGeometryPassGpuTimer);
 
 		D_END_PROFILING(RenderObject);
 	}

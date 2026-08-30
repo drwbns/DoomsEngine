@@ -145,16 +145,35 @@ namespace dooms
 			};
 
 			static constexpr UINT32 GPU_TIMER_FRAME_COUNT = 3;
-			GpuTimerFrame mHiZGpuTimers[GPU_TIMER_FRAME_COUNT]{};
-			UINT32 mHiZGpuTimerIndex{ 0 };
-			bool bmAreGpuTimersCreated{ false };
 
 			/// <summary>
-			/// Starts timing the Hi-Z build on the gpu, and collects whichever
-			/// earlier frame's result has become available.
+			/// A rotating set of the above, measuring one span of gpu work.
+			///
+			/// One of these per thing worth timing. Comparing two rendering
+			/// techniques means being able to time whatever the next one turns out
+			/// to need, so this is a value to declare rather than a pass to
+			/// hand write.
 			/// </summary>
-			void BeginHiZGpuTimer();
-			void EndHiZGpuTimer();
+			struct GpuTimerRing
+			{
+				GpuTimerFrame mFrames[GPU_TIMER_FRAME_COUNT]{};
+				UINT32 mFrameIndex{ 0 };
+				bool bmAreQueriesCreated{ false };
+			};
+
+			GpuTimerRing mHiZGpuTimer{};
+			GpuTimerRing mGeometryPassGpuTimer{};
+			GpuTimerRing mDepthPrePassGpuTimer{};
+
+			/// <summary>
+			/// Opens a gpu timing span, and publishes whichever earlier frame's
+			/// result has become available into destinationMilliseconds.
+			///
+			/// The result written is two or three frames old. That is inherent to
+			/// asking a gpu how long it took without stalling on the answer.
+			/// </summary>
+			void BeginGpuTimer(GpuTimerRing& gpuTimerRing, FLOAT32& destinationMilliseconds);
+			void EndGpuTimer(GpuTimerRing& gpuTimerRing);
 
 			/// <summary>
 			/// Draws a quad covering the target with whatever material is bound.

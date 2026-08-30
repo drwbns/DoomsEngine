@@ -76,6 +76,14 @@ namespace dooms
 			// than per renderer, because timing 5806 objects individually costs
 			// more than the thing being timed.
 			extern inline float CpuStatPreRenderRendererMilliseconds{ 0.0f };
+
+			// Gpu time for the passes that actually touch pixels.
+			//
+			// Overdraw only matters because it costs time, so a technique that
+			// claims to reduce it has to be judged on these rather than on how
+			// the heatmap looks.
+			extern inline float GpuStatGeometryPassMilliseconds{ 0.0f };
+			extern inline float GpuStatDepthPrePassMilliseconds{ 0.0f };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

@@ -568,6 +568,25 @@ namespace
                 ImGui::SetTooltip("%s", "rejects whole subtrees instead of testing every object, replacing the frustum module");
             }
 
+            {
+                // Reads the enum rather than mirroring it, so the box cannot
+                // drift from what the pipeline is doing.
+                bool bIsDepthPrePassEnabled =
+                    (dooms::graphics::graphicsAPISetting::DepthPrePassType == dooms::graphics::eDepthPrePassType::AllOpaque);
+
+                if (ImGui::Checkbox("Depth pre-pass", &bIsDepthPrePassEnabled))
+                {
+                    dooms::graphics::graphicsAPISetting::DepthPrePassType = bIsDepthPrePassEnabled
+                        ? dooms::graphics::eDepthPrePassType::AllOpaque
+                        : dooms::graphics::eDepthPrePassType::Disable;
+                }
+
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+                {
+                    ImGui::SetTooltip("%s", "lays depth down first so the g-buffer pass shades each pixel once, at the cost of drawing everything twice");
+                }
+            }
+
             if (ImGui::Checkbox("Distance culling", &gIsDistanceCullingEnabled))
             {
                 // Re-applied through the mode, which is what actually reaches
@@ -981,6 +1000,21 @@ void dooms::ui::EngineGUIServer::Update()
 
         ShowNotification("BVH culling: %s",
             dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled ? "On" : "Off");
+    }
+
+    // P toggles the depth pre pass, the one lever in this engine that attacks
+    // overdraw directly rather than by drawing fewer objects.
+    if (ImGui::GetIO().WantCaptureKeyboard == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_P))
+    {
+        const bool bIsEnabled =
+            (dooms::graphics::graphicsAPISetting::DepthPrePassType == dooms::graphics::eDepthPrePassType::AllOpaque);
+
+        dooms::graphics::graphicsAPISetting::DepthPrePassType = bIsEnabled
+            ? dooms::graphics::eDepthPrePassType::Disable
+            : dooms::graphics::eDepthPrePassType::AllOpaque;
+
+        ShowNotification("Depth pre-pass: %s", bIsEnabled ? "Off" : "On");
     }
 
     // F4 puts the panels back into the default arrangement.

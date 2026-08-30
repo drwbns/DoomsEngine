@@ -46,6 +46,18 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			ImGui::Text("Hi-Z test  : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds);
 		}
 
+		// The two passes that touch pixels. Shown together because a depth
+		// pre-pass is a trade between them, and either number alone hides it.
+		if (dooms::graphics::graphicsSetting::GpuStatGeometryPassMilliseconds > 0.0f)
+		{
+			ImGui::Text("Geometry   : %.3f ms (GPU)", dooms::graphics::graphicsSetting::GpuStatGeometryPassMilliseconds);
+		}
+
+		if (dooms::graphics::graphicsSetting::GpuStatDepthPrePassMilliseconds > 0.0f)
+		{
+			ImGui::Text("Depth pre  : %.3f ms (GPU)", dooms::graphics::graphicsSetting::GpuStatDepthPrePassMilliseconds);
+		}
+
 		// Always shown, because this is where keeping the BVH current is paid
 		// for and it is the largest cost the tree has. Reading it only while
 		// the tree is on would hide what turning the tree on actually did.
