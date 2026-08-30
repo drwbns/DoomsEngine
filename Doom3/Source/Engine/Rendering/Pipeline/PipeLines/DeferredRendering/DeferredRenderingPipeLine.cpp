@@ -21,6 +21,9 @@
 #include <Rendering/Culling/EveryCulling/CullingModule/MaskedSWOcclusionCulling/MaskedSWOcclusionCulling.h>
 #include <cstring>
 #include <chrono>
+#include <array>
+#include <Misc/AccelerationContainer/BVH/BVH.h>
+#include <Rendering/Renderer/RendererStaticIterator.h>
 
 dooms::graphics::DeferredRenderingPipeLine::DeferredRenderingPipeLine
 (
@@ -610,6 +613,134 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 	}
 }
 
+void dooms::graphics::DeferredRenderingPipeLine::ApplyBVHFrustumCulling(dooms::Camera* const targetCamera, const size_t cameraIndex)
+{
+	if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled == false)
+	{
+		return;
+	}
+
+	const std::chrono::steady_clock::time_point cullStartTime = std::chrono::steady_clock::now();
+
+	dooms::BVHAABB3D& rendererBVH = mGraphicsServer.mRendererColliderBVH;
+
+	const INT32 rootNodeIndex = rendererBVH.GetRootNodeIndex();
+	if (rendererBVH.GetIsNodeValid(rootNodeIndex) == false)
+	{
+		return;
+	}
+
+	const std::array<math::Vector4, 6> frustumPlanes = targetCamera->CalculateFrustumPlane();
+
+	mBVHVisibleNodes.assign(rendererBVH.GetNodeCapacity(), false);
+	mBVHTraversalStack.clear();
+	mBVHTraversalStack.push_back(rootNodeIndex);
+
+	while (mBVHTraversalStack.empty() == false)
+	{
+		const INT32 nodeIndex = mBVHTraversalStack.back();
+		mBVHTraversalStack.pop_back();
+
+		const dooms::BVHAABB3D::node_type* const node = rendererBVH.GetNode(nodeIndex);
+		if (node == nullptr)
+		{
+			continue;
+		}
+
+		const math::Vector3 lowerBound = static_cast<math::Vector3>(node->mBoundingCollider.mLowerBound);
+		const math::Vector3 upperBound = static_cast<math::Vector3>(node->mBoundingCollider.mUpperBound);
+
+		// Rejected against every plane using the box corner furthest along that
+		// plane's normal. If even that corner is behind the plane, nothing in the
+		// box is in front of it, and nothing in the subtree can be visible.
+		bool bIsOutside = false;
+
+		for (size_t planeIndex = 0; planeIndex < frustumPlanes.size() && bIsOutside == false; planeIndex++)
+		{
+			const math::Vector4& plane = frustumPlanes[planeIndex];
+
+			const math::Vector3 furthestCorner(
+				(plane.x >= 0.0f) ? upperBound.x : lowerBound.x,
+				(plane.y >= 0.0f) ? upperBound.y : lowerBound.y,
+				(plane.z >= 0.0f) ? upperBound.z : lowerBound.z);
+
+			if ((plane.x * furthestCorner.x + plane.y * furthestCorner.y + plane.z * furthestCorner.z + plane.w) < 0.0f)
+			{
+				bIsOutside = true;
+			}
+		}
+
+		if (bIsOutside)
+		{
+			// The whole subtree goes with it. This is the saving: one test
+			// instead of one per object underneath.
+			continue;
+		}
+
+		mBVHVisibleNodes[static_cast<size_t>(nodeIndex)] = true;
+
+		if (node->mIsLeaf == false)
+		{
+			if (rendererBVH.GetIsNodeValid(node->mLeftNode))
+			{
+				mBVHTraversalStack.push_back(node->mLeftNode);
+			}
+
+			if (rendererBVH.GetIsNodeValid(node->mRightNode))
+			{
+				mBVHTraversalStack.push_back(node->mRightNode);
+			}
+		}
+	}
+
+	// Renderers know their own node, so the result is read that way round. The
+	// tree has no way back to a renderer: leaves are inserted with a null
+	// collider, and nothing else identifies the owner.
+	const std::vector<Renderer*>& renderers = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
+
+	for (Renderer* const renderer : renderers)
+	{
+		if (IsValid(renderer) == false || renderer->GetIsComponentEnabled() == false)
+		{
+			continue;
+		}
+
+		// Through the node rather than the view's index, which is private.
+		const dooms::BVH_Node_View<dooms::physics::AABB3D>& nodeView = renderer->BVH_AABB3D_Node_Object::mBVH_Node_View;
+		if (nodeView.IsValid() == false)
+		{
+			continue;
+		}
+
+		const dooms::BVHAABB3D::node_type* const rendererNode = nodeView.GetNode();
+		if (rendererNode == nullptr)
+		{
+			continue;
+		}
+
+		const INT32 nodeIndex = rendererNode->mIndex;
+
+		if (nodeIndex < 0 || static_cast<size_t>(nodeIndex) >= mBVHVisibleNodes.size())
+		{
+			continue;
+		}
+
+		if (mBVHVisibleNodes[static_cast<size_t>(nodeIndex)] == false)
+		{
+			culling::EntityBlockViewer& viewer = renderer->mCullingEntityBlockViewer;
+
+			if (viewer.IsValid())
+			{
+				viewer.GetTargetEntityBlock()->SetCulled(viewer.GetEntityIndexInBlock(), cameraIndex);
+			}
+		}
+	}
+
+	graphicsSetting::CpuStatBVHCullMilliseconds = static_cast<FLOAT32>(
+		std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+			std::chrono::steady_clock::now() - cullStartTime).count());
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::UpdateCullStatistics(const size_t cameraIndex)
 {
 	culling::EveryCulling* const cullingSystem = mRenderingCullingManager.mCullingSystem.get();
@@ -831,6 +962,8 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	// marking one culled any later than this is wiped before it can matter. The
 	// data it reads is from an earlier frame, which is the point: waiting for
 	// this frame's pyramid would stall the cpu on the gpu.
+	// Before the Hi-Z test, so it can skip whatever this already removed.
+	ApplyBVHFrustumCulling(targetCamera, cameraIndex);
 	ApplyHiZOcclusionCulling(cameraIndex);
 	UpdateCullStatistics(cameraIndex);
 

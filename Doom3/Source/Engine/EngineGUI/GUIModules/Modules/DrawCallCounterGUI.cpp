@@ -46,6 +46,11 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			ImGui::Text("Hi-Z test  : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds);
 		}
 
+		if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled)
+		{
+			ImGui::Text("BVH cull   : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatBVHCullMilliseconds);
+		}
+
 		// Per module cpu time, straight from EveryCulling's own profiler.
 		//
 		// It has been recording this all along, but the only thing reading it is

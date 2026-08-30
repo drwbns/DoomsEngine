@@ -116,6 +116,20 @@ namespace dooms
 			/// </summary>
 			void UpdateCullStatistics(const size_t cameraIndex);
 
+			// Reused between frames so a traversal does not allocate. Indexed by
+			// BVH node index.
+			std::vector<bool> mBVHVisibleNodes{};
+			std::vector<INT32> mBVHTraversalStack{};
+
+			/// <summary>
+			/// Rejects whole subtrees of the renderer BVH against the frustum.
+			///
+			/// The tree is built and kept up to date already -- every Renderer
+			/// inserts itself into it -- but nothing has ever culled with it, so
+			/// every module walks all of the objects instead.
+			/// </summary>
+			void ApplyBVHFrustumCulling(dooms::Camera* const targetCamera, const size_t cameraIndex);
+
 			// One frame's worth of gpu timing: a disjoint query bracketing the
 			// work, and a timestamp either side of it.
 			//

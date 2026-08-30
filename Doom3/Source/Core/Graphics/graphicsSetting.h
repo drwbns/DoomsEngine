@@ -41,6 +41,12 @@ namespace dooms
 			// pyramid. The counterpart to the gpu build time above: Hi-Z spends on
 			// both processors and only the pair of numbers describes its cost.
 			extern inline float CpuStatHiZTestMilliseconds{ 0.0f };
+
+			// Reject whole subtrees of the renderer BVH against the frustum,
+			// instead of testing every object one at a time. A toggle rather than
+			// a replacement, so it can be measured against what it replaces.
+			extern inline bool IsBVHFrustumCullingEnabled{ false };
+			extern inline float CpuStatBVHCullMilliseconds{ 0.0f };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

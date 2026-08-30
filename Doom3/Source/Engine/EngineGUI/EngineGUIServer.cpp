@@ -422,8 +422,14 @@ namespace
 
         const OcclusionMode& occlusionMode = gOcclusionModes[index];
 
+        // BVH culling replaces the per object frustum module rather than
+        // running beside it. Both reject the same objects, so leaving the
+        // module on would hide whatever the tree saves.
+        const bool bIsModuleFrustumEnabled =
+            occlusionMode.mIsViewFrustumEnabled && (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled == false);
+
         cullingSystem->SetEnabledCullingModule(
-            culling::EveryCulling::CullingModuleType::ViewFrustumCulling, occlusionMode.mIsViewFrustumEnabled);
+            culling::EveryCulling::CullingModuleType::ViewFrustumCulling, bIsModuleFrustumEnabled);
         cullingSystem->SetEnabledCullingModule(
             culling::EveryCulling::CullingModuleType::DistanceCulling, gIsDistanceCullingEnabled);
         cullingSystem->SetEnabledCullingModule(
@@ -483,6 +489,17 @@ namespace
 
             // Sits with the culling readouts rather than the visualisation
             // toggles, because it changes what is drawn, not how it is shown.
+            if (ImGui::Checkbox("BVH frustum culling", &graphicsSetting::IsBVHFrustumCullingEnabled))
+            {
+                // Re-applied, because this decides whether the per object
+                // frustum module runs at all.
+                ApplyOcclusionModeIndex(gOcclusionModeIndex);
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            {
+                ImGui::SetTooltip("%s", "rejects whole subtrees instead of testing every object, replacing the frustum module");
+            }
+
             if (ImGui::Checkbox("Distance culling", &gIsDistanceCullingEnabled))
             {
                 // Re-applied through the mode, which is what actually reaches

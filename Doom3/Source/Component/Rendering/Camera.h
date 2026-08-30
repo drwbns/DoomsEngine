@@ -84,7 +84,16 @@ namespace dooms
 		D_PROPERTY()
 		graphics::GraphicsPipeLineCamera* mGraphicsPipeLineCamera;
 
+		/// <summary>
+		/// The six frustum planes, as xyz normal and w distance.
+		///
+		/// Public because culling against the renderer BVH needs them and lives
+		/// outside the camera. Nothing here depends on it staying private: it
+		/// derives the planes from the view projection matrix and keeps nothing.
+		/// </summary>
+	public:
 		std::array<math::Vector4, 6> CalculateFrustumPlane();
+	private:
 
 		void InitCameraViewportRect();
 		void InitGraphicsPipeLineCamera();
