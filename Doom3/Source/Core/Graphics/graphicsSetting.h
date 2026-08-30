@@ -31,6 +31,11 @@ namespace dooms
 			// count, which moves for other reasons too.
 			extern inline unsigned int CullStatEntityCount{ 0 };
 			extern inline unsigned int CullStatCulledCount{ 0 };
+
+			// Milliseconds the gpu spent building the Hi-Z pyramid, from gpu
+			// timestamps rather than cpu clocks. Zero until the first result
+			// comes back, which is a frame or two after the work was issued.
+			extern inline float GpuStatHiZBuildMilliseconds{ 0.0f };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

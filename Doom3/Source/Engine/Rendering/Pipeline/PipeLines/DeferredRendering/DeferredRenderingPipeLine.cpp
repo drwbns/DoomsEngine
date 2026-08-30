@@ -95,6 +95,87 @@ void dooms::graphics::DeferredRenderingPipeLine::DrawHiZQuad()
 	}
 }
 
+void dooms::graphics::DeferredRenderingPipeLine::BeginHiZGpuTimer()
+{
+	if (GraphicsAPI::CreateQuery == nullptr || GraphicsAPI::BeginQuery == nullptr ||
+		GraphicsAPI::EndQuery == nullptr || GraphicsAPI::GetQueryResult == nullptr)
+	{
+		return;
+	}
+
+	if (bmAreGpuTimersCreated == false)
+	{
+		for (UINT32 frameIndex = 0; frameIndex < GPU_TIMER_FRAME_COUNT; frameIndex++)
+		{
+			mHiZGpuTimers[frameIndex].mDisjointQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP_DISJOINT);
+			mHiZGpuTimers[frameIndex].mStartQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP);
+			mHiZGpuTimers[frameIndex].mEndQuery = GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_TIMESTAMP);
+		}
+
+		bmAreGpuTimersCreated = true;
+	}
+
+	// Collect the oldest one first. Going round the ring means this is the
+	// frame furthest from the one about to be issued, so it has had the most
+	// time to finish.
+	GpuTimerFrame& oldestTimer = mHiZGpuTimers[(mHiZGpuTimerIndex + 1) % GPU_TIMER_FRAME_COUNT];
+
+	if (oldestTimer.bmIsPending && oldestTimer.mDisjointQuery != 0)
+	{
+		unsigned long long frequency = 0;
+		unsigned int bIsDisjoint = 0;
+
+		if (GraphicsAPI::GetQueryResult(oldestTimer.mDisjointQuery, GraphicsAPI::QUERY_TIMESTAMP_DISJOINT, &frequency, &bIsDisjoint) != 0)
+		{
+			unsigned long long startTicks = 0;
+			unsigned long long endTicks = 0;
+
+			const bool bHasBothTimestamps =
+				(GraphicsAPI::GetQueryResult(oldestTimer.mStartQuery, GraphicsAPI::QUERY_TIMESTAMP, &startTicks, nullptr) != 0) &&
+				(GraphicsAPI::GetQueryResult(oldestTimer.mEndQuery, GraphicsAPI::QUERY_TIMESTAMP, &endTicks, nullptr) != 0);
+
+			// Disjoint means the gpu clock was interrupted during the span, so
+			// the tick counts either side of it cannot be compared. The only
+			// correct thing to do is drop the measurement.
+			if (bHasBothTimestamps && (bIsDisjoint == 0) && (frequency > 0) && (endTicks >= startTicks))
+			{
+				graphicsSetting::GpuStatHiZBuildMilliseconds =
+					static_cast<FLOAT32>(static_cast<double>(endTicks - startTicks) * 1000.0 / static_cast<double>(frequency));
+			}
+
+			oldestTimer.bmIsPending = false;
+		}
+	}
+
+	GpuTimerFrame& currentTimer = mHiZGpuTimers[mHiZGpuTimerIndex];
+
+	if (currentTimer.mDisjointQuery != 0 && currentTimer.bmIsPending == false)
+	{
+		GraphicsAPI::BeginQuery(currentTimer.mDisjointQuery);
+		GraphicsAPI::EndQuery(currentTimer.mStartQuery);
+	}
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::EndHiZGpuTimer()
+{
+	if (GraphicsAPI::EndQuery == nullptr || bmAreGpuTimersCreated == false)
+	{
+		return;
+	}
+
+	GpuTimerFrame& currentTimer = mHiZGpuTimers[mHiZGpuTimerIndex];
+
+	if (currentTimer.mDisjointQuery != 0 && currentTimer.bmIsPending == false)
+	{
+		GraphicsAPI::EndQuery(currentTimer.mEndQuery);
+		GraphicsAPI::EndQuery(currentTimer.mDisjointQuery);
+
+		currentTimer.bmIsPending = true;
+	}
+
+	mHiZGpuTimerIndex = (mHiZGpuTimerIndex + 1) % GPU_TIMER_FRAME_COUNT;
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* const targetCamera)
 {
 	dooms::graphics::DeferredRenderingPipeLineCamera* const deferredRenderingPipeLineCamera
@@ -182,6 +263,8 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 		return;
 	}
 
+	BeginHiZGpuTimer();
+
 	// The pyramid is written, never blended or depth tested.
 	GraphicsAPI::SetIsBlendEnabled(false);
 	GraphicsAPI::SetIsDepthTestEnabled(false);
@@ -258,6 +341,8 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 	GraphicsAPI::SetIsDepthTestEnabled(true);
 	GraphicsAPI::SetDepthMask(true);
 	FrameBuffer::StaticBindBackFrameBuffer();
+
+	EndHiZGpuTimer();
 
 	ReadBackHiZLevel();
 }

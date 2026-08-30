@@ -945,6 +945,48 @@ namespace dooms
 			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_UNMAPTEXTURE2D)(const unsigned long long stagingTexture);
 			extern GRAPHICS_UNMAPTEXTURE2D UnMapTexture2D;
 
+			/// <summary>
+			/// Timing what the gpu actually did, rather than how long the cpu
+			/// spent asking it to.
+			///
+			/// Two kinds of query are needed together. A disjoint query brackets
+			/// the frame and reports the tick frequency, along with whether the
+			/// clock was interrupted, in which case the timestamps inside it mean
+			/// nothing and have to be thrown away. Timestamp queries record a tick
+			/// count at the point they are issued; a duration is the difference
+			/// between two of them.
+			/// </summary>
+			enum eQueryType : unsigned int
+			{
+				QUERY_TIMESTAMP,
+				QUERY_TIMESTAMP_DISJOINT
+			};
+
+			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATEQUERY)(const eQueryType queryType);
+			extern GRAPHICS_CREATEQUERY CreateQuery;
+
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_DESTROYQUERY)(const unsigned long long query);
+			extern GRAPHICS_DESTROYQUERY DestroyQuery;
+
+			/// <summary>Only meaningful for a disjoint query.</summary>
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_BEGINQUERY)(const unsigned long long query);
+			extern GRAPHICS_BEGINQUERY BeginQuery;
+
+			/// <summary>Ends a disjoint query, or records a timestamp.</summary>
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_ENDQUERY)(const unsigned long long query);
+			extern GRAPHICS_ENDQUERY EndQuery;
+
+			/// <summary>
+			/// Non blocking. Returns zero while the gpu has not reached the query
+			/// yet, which is the normal case for the frame that issued it.
+			///
+			/// outFrequency and outIsDisjoint are filled for a disjoint query,
+			/// outTimestamp for a timestamp query. Pass null for the ones that do
+			/// not apply.
+			/// </summary>
+			typedef unsigned int (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_GETQUERYRESULT)(const unsigned long long query, const eQueryType queryType, unsigned long long* const outTimestampOrFrequency, unsigned int* const outIsDisjoint);
+			extern GRAPHICS_GETQUERYRESULT GetQueryResult;
+
 			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_DESTROYTEXTUREVIEWOBJECT)(unsigned long long textureViewObject);
 			extern GRAPHICS_DESTROYTEXTUREVIEWOBJECT DestroyTextureViewObject;
 

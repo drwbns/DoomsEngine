@@ -1940,6 +1940,41 @@ namespace dooms
 			return textureObject;
 		}
 
+		// GPU timing is not implemented on this backend.
+		//
+		// OpenGL times with glQueryCounter and GL_TIMESTAMP, which needs no
+		// disjoint query and reports nanoseconds directly rather than ticks and
+		// a frequency. That is a different shape from these entry points, and
+		// faking it would report numbers that are not what they claim. Creation
+		// returns nothing and callers null check.
+		DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateQuery(const GraphicsAPI::eQueryType queryType)
+		{
+			return 0;
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API void DestroyQuery(const unsigned long long query)
+		{
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API void BeginQuery(const unsigned long long query)
+		{
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API void EndQuery(const unsigned long long query)
+		{
+		}
+
+		DOOMS_ENGINE_GRAPHICS_API unsigned int GetQueryResult
+		(
+			const unsigned long long query,
+			const GraphicsAPI::eQueryType queryType,
+			unsigned long long* const outTimestampOrFrequency,
+			unsigned int* const outIsDisjoint
+		)
+		{
+			return 0;
+		}
+
 		// Texture readback is not implemented on this backend.
 		//
 		// OpenGL has no staging texture: the equivalent is glGetTexImage into a

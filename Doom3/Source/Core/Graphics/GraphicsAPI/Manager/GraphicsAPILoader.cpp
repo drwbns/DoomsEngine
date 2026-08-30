@@ -123,6 +123,11 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	dooms::graphics::GraphicsAPI::CopyTexture2DToStagingTexture = (GraphicsAPI::GRAPHICS_COPYTEXTURE2DTOSTAGINGTEXTURE)GetProcAddress(hModule, "CopyTexture2DToStagingTexture");
 	dooms::graphics::GraphicsAPI::MapTexture2DForRead = (GraphicsAPI::GRAPHICS_MAPTEXTURE2DFORREAD)GetProcAddress(hModule, "MapTexture2DForRead");
 	dooms::graphics::GraphicsAPI::UnMapTexture2D = (GraphicsAPI::GRAPHICS_UNMAPTEXTURE2D)GetProcAddress(hModule, "UnMapTexture2D");
+	dooms::graphics::GraphicsAPI::CreateQuery = (GraphicsAPI::GRAPHICS_CREATEQUERY)GetProcAddress(hModule, "CreateQuery");
+	dooms::graphics::GraphicsAPI::DestroyQuery = (GraphicsAPI::GRAPHICS_DESTROYQUERY)GetProcAddress(hModule, "DestroyQuery");
+	dooms::graphics::GraphicsAPI::BeginQuery = (GraphicsAPI::GRAPHICS_BEGINQUERY)GetProcAddress(hModule, "BeginQuery");
+	dooms::graphics::GraphicsAPI::EndQuery = (GraphicsAPI::GRAPHICS_ENDQUERY)GetProcAddress(hModule, "EndQuery");
+	dooms::graphics::GraphicsAPI::GetQueryResult = (GraphicsAPI::GRAPHICS_GETQUERYRESULT)GetProcAddress(hModule, "GetQueryResult");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateTextureViewObject != nullptr);
 	dooms::graphics::GraphicsAPI::CreateVertexArrayObject = (GraphicsAPI::GRAPHICS_CREATEVERTEXARRAYOBJECT)GetProcAddress(hModule, "CreateVertexArrayObject");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::CreateVertexArrayObject != nullptr);

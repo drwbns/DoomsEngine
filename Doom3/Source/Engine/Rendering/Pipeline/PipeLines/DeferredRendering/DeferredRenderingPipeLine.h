@@ -116,6 +116,32 @@ namespace dooms
 			/// </summary>
 			void UpdateCullStatistics(const size_t cameraIndex);
 
+			// One frame's worth of gpu timing: a disjoint query bracketing the
+			// work, and a timestamp either side of it.
+			//
+			// Three frames of them in rotation, because a result is not ready in
+			// the frame that issued it and asking for one that is not ready either
+			// stalls or returns nothing.
+			struct GpuTimerFrame
+			{
+				unsigned long long mDisjointQuery{ 0 };
+				unsigned long long mStartQuery{ 0 };
+				unsigned long long mEndQuery{ 0 };
+				bool bmIsPending{ false };
+			};
+
+			static constexpr UINT32 GPU_TIMER_FRAME_COUNT = 3;
+			GpuTimerFrame mHiZGpuTimers[GPU_TIMER_FRAME_COUNT]{};
+			UINT32 mHiZGpuTimerIndex{ 0 };
+			bool bmAreGpuTimersCreated{ false };
+
+			/// <summary>
+			/// Starts timing the Hi-Z build on the gpu, and collects whichever
+			/// earlier frame's result has become available.
+			/// </summary>
+			void BeginHiZGpuTimer();
+			void EndHiZGpuTimer();
+
 			/// <summary>
 			/// Draws a quad covering the target with whatever material is bound.
 			/// The deferred drawer's own quad cannot be borrowed for this: it

@@ -2023,6 +2023,112 @@ namespace dooms
             
         }
 
+        DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateQuery(const GraphicsAPI::eQueryType queryType)
+        {
+            D3D11_QUERY_DESC queryDesc = {};
+            queryDesc.MiscFlags = 0;
+
+            switch (queryType)
+            {
+            case GraphicsAPI::QUERY_TIMESTAMP:
+                queryDesc.Query = D3D11_QUERY_TIMESTAMP;
+                break;
+            case GraphicsAPI::QUERY_TIMESTAMP_DISJOINT:
+                queryDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+                break;
+            default:
+                ASSUME_ZERO;
+                return 0;
+            }
+
+            ID3D11Query* query = nullptr;
+
+            const HRESULT hr = dx11::g_pd3dDevice->CreateQuery(&queryDesc, &query);
+            assert(FAILED(hr) == false);
+
+            if (FAILED(hr))
+            {
+                return 0;
+            }
+
+            return reinterpret_cast<unsigned long long>(query);
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void DestroyQuery(const unsigned long long query)
+        {
+            if (query != 0)
+            {
+                reinterpret_cast<ID3D11Query*>(query)->Release();
+            }
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void BeginQuery(const unsigned long long query)
+        {
+            assert(query != 0);
+
+            dx11::g_pImmediateContext->Begin(reinterpret_cast<ID3D11Query*>(query));
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void EndQuery(const unsigned long long query)
+        {
+            assert(query != 0);
+
+            // A timestamp query is only ever ended, never begun: it records when
+            // the gpu reaches this point rather than measuring a span itself.
+            dx11::g_pImmediateContext->End(reinterpret_cast<ID3D11Query*>(query));
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API unsigned int GetQueryResult
+        (
+            const unsigned long long query,
+            const GraphicsAPI::eQueryType queryType,
+            unsigned long long* const outTimestampOrFrequency,
+            unsigned int* const outIsDisjoint
+        )
+        {
+            assert(query != 0);
+
+            ID3D11Query* const d3d11Query = reinterpret_cast<ID3D11Query*>(query);
+
+            if (queryType == GraphicsAPI::QUERY_TIMESTAMP_DISJOINT)
+            {
+                D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjointData = {};
+
+                // No flags, so this does not block: S_FALSE while the gpu has
+                // not got there yet, which is the normal answer in the frame
+                // that issued it.
+                if (dx11::g_pImmediateContext->GetData(d3d11Query, &disjointData, sizeof(disjointData), 0) != S_OK)
+                {
+                    return 0;
+                }
+
+                if (outTimestampOrFrequency != nullptr)
+                {
+                    *outTimestampOrFrequency = disjointData.Frequency;
+                }
+
+                if (outIsDisjoint != nullptr)
+                {
+                    *outIsDisjoint = (disjointData.Disjoint != FALSE) ? 1u : 0u;
+                }
+
+                return 1;
+            }
+
+            UINT64 timestamp = 0;
+            if (dx11::g_pImmediateContext->GetData(d3d11Query, &timestamp, sizeof(timestamp), 0) != S_OK)
+            {
+                return 0;
+            }
+
+            if (outTimestampOrFrequency != nullptr)
+            {
+                *outTimestampOrFrequency = timestamp;
+            }
+
+            return 1;
+        }
+
         DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateStagingTexture2D
         (
             const unsigned int width,
