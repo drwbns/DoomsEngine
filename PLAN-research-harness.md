@@ -201,6 +201,41 @@ Two conclusions, and only the first is about BVHs:
   culling budget beneath it. That is the entity block bounds update for every
   renderer, and it is now the largest CPU cost in the frame that is not drawing.
 
+### Overdraw is not where the time is
+
+The obvious lever against overdraw is a depth pre pass, and the engine already
+had one: written, correct, and disabled since it was added. Switched on with
+**P** and measured on one frozen frame of 3758 drawn objects, output identical
+between the two at SSIM 1.000000.
+
+| | draws | depth pre | geometry | gpu total | fps |
+| --- | --- | --- | --- | --- | --- |
+| pre pass off | 3770 | | 16.67 ms | 16.67 ms | 46 |
+| pre pass on | 7528 | 8.92 ms | 13.61 ms | 22.53 ms | 37 |
+
+It does what it claims. Laying depth down first removes overdraw shading from
+the geometry pass and takes 3.05 ms off it. It costs 8.92 ms to do that, so the
+frame is 5.9 ms worse.
+
+The useful number is not the verdict but the 3.05 ms. **That is the entire
+prize available to any overdraw reduction technique in this scene**, about 18%
+of the geometry pass. A perfect one that cost nothing could not beat it.
+
+Where the rest goes is visible in the same table. The depth only pass writes no
+colour and runs a trivial pixel shader, and it still costs 53% of the full
+pass. What it has in common with the full pass is 3758 draw calls. The geometry
+pass is bound by submitting them, not by filling pixels, so the technique worth
+researching here is not a better occlusion method but **instancing**: the scene
+is thousands of copies of a handful of rock meshes, each issued as its own
+draw. `BatchRenderingManager` already exists and already batches, but only for
+entities marked `Static`, and every rock here is `Dynamic` because it moves.
+
+The Debug caveat is sharper for this result than for the others. Debug inflates
+per draw submission cost far more than it inflates shading, so the balance
+between the two columns would shift toward fill in Release. The 3.05 ms ceiling
+on overdraw work is measured, but how much of the remaining 13.6 ms is really
+per draw overhead is not, until it is re measured.
+
 ## Next
 
 1. **Tests around the culling math**, per phase 5 below. The V flip was caught by
@@ -210,9 +245,13 @@ Two conclusions, and only the first is about BVHs:
    current implementation covers with a one cell margin.
 3. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
-4. **`PreRender` at 4.9 ms**, ten times the culling budget it feeds. Every
-   renderer rewrites its world bounds every frame whether or not it moved.
-5. **Re-measure everything in Release.** Every number in this document is from a
+4. **Instancing for dynamic renderers**, which the measurement above points at
+   far more strongly than anything left in culling.
+5. **`PreRender`**, which costs 4.9 ms while the scene moves and 1.0 ms while it
+   is paused. The 3.9 ms difference is recomputing a world AABB per moving
+   object; the 1.0 ms floor is copying bounds and a matrix into the entity block
+   for all 5806 whether or not they moved.
+6. **Re-measure everything in Release.** Every number in this document is from a
    Debug build, which is fine for comparing two techniques that are both scalar
    and unfair to the one that is not.
 
