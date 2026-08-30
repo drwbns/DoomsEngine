@@ -131,10 +131,12 @@ The harness works when you can:
    — **done.** F6 cycles occluder bounds, binned triangles, tile coverage, tile
    depth, overdraw, depth buffer, and the Hi-Z pyramid with F9 stepping levels.
 4. Trust the numbers, because the math underneath has tests.
-   — **not done.** `unit_tests` still has no source files. What stands in for it
-   so far is F5 freezing the scene, and checking that two culling modes render
-   an identical frame, which is how the flipped V that made Hi-Z cull visible
-   geometry was caught.
+   — **partly.** `unit_tests` still has no source files. Standing in for them:
+   F5 freezes the scene so two modes can be compared on one frame at SSIM
+   1.000000, which caught the flipped V that made Hi-Z cull visible geometry;
+   and the BVH pass now audits itself every frame against bounds it cannot have
+   corrupted, reporting a count the overlay shows in red if it is ever not zero.
+   The second is the shape the real tests should take.
 
 ## What the harness has actually shown
 
@@ -160,20 +162,59 @@ culler has to rasterise occluders, so a wider occluder set costs it linearly.
 Hi-Z reads the depth buffer the frame already produced, where every drawn object
 occludes and the information was free.
 
+### Hierarchical culling over the BVH does not pay here
+
+Implemented behind a toggle and measured on one frozen frame of 5806 objects.
+Correct, and slower by a factor of forty.
+
+| | culled | draws | frustum cost | fps |
+| --- | --- | --- | --- | --- |
+| per object frustum module | 5601 | 217 | 0.050 ms | 141 |
+| BVH tree traversal | 5610 | 208 | 1.97 ms | 112 |
+
+Both render the same image, verified at SSIM 1.000000, and the audit described
+below reports zero objects rejected by the tree that the frustum accepts. The
+tree is in fact slightly *tighter* than the module — those nine objects are
+genuinely outside the frustum and contribute no pixels — so this is a real
+comparison between two correct implementations, not a bug.
+
+Two reasons it loses, and only one of them is the build:
+
+- **The traversal saves work the implementation then spends anyway.** Rejecting
+  a subtree avoids testing its objects, but the results are still applied by
+  looping over all 5806 renderers to ask each one whether its node survived.
+  The pass is O(objects) regardless of how much the tree pruned, so the
+  asymptotic win never arrives. Fixing this means walking surviving leaves
+  rather than polling every renderer.
+- **It is scalar C++ against SIMD across threads.** `ViewFrustumCulling` is
+  vectorised and multithreaded; the traversal is a pointer-chasing loop with a
+  `std::vector<bool>` cleared to node capacity every frame. This is a Debug
+  build, which punishes that shape far more than the code it is competing with,
+  so the forty times figure is an upper bound on the gap, not a measurement of
+  it. **Re-measure in Release before treating the margin as real.**
+
+The honest conclusion for this scene is narrower than "BVHs are slow": 5806
+objects spread evenly through the view give few subtrees that fall wholly
+outside the frustum, which is the only case the hierarchy is paid for. The
+technique wants either far more objects or far more spatial clustering than
+this scene has.
+
+The maintenance cost is not in the number above. Keeping the tree current runs
+in `Renderer::PreRender`, and the frame it was measured on was paused, so
+nothing was dirty and it was free. In a moving scene it is not.
+
 ## Next
 
-1. **Hierarchical culling over the existing BVH.** `BVH.cpp` is built and
-   maintained every frame — physics uses it, culling never references it, and the
-   renderer's BVH visibility check is commented out. Meanwhile PreCulling is now
-   the most expensive stage at ~0.48 ms, touching all 5806 objects unconditionally
-   in every mode. This is the one change that would improve every mode rather than
-   adding another to compare.
-2. **Tests around the culling math**, per phase 5 below. The V flip was caught by
-   eye, and only because the artefact happened to be in open sky.
-3. **Two-phase occlusion culling.** The principled fix for the staleness that the
+1. **Tests around the culling math**, per phase 5 below. The V flip was caught by
+   eye, and the BVH staleness by a screenshot; the audit added for the BVH is the
+   first check in the harness that does not need a human looking at it.
+2. **Two-phase occlusion culling.** The principled fix for the staleness that the
    current implementation covers with a one cell margin.
-4. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
+3. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
+4. **Re-measure everything in Release.** Every number in this document is from a
+   Debug build, which is fine for comparing two techniques that are both scalar
+   and unfair to the one that is not.
 
 ## Deliberately out of scope
 
