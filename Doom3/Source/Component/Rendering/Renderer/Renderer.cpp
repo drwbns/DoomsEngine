@@ -6,6 +6,7 @@
 #include <Rendering/Pipeline/PipeLines/DefaultGraphcisPipeLine.h>
 #include <Rendering/Graphics_Server.h>
 #include <Rendering/Batch/BatchRenderingManager.h>
+#include <Graphics/graphicsSetting.h>
 
 void dooms::Renderer::SetRenderingFlag(const eRenderingFlag flag, const bool isSet)
 {
@@ -179,7 +180,21 @@ void dooms::Renderer::PreRender()
 {
 	if(GetIsComponentEnabled() == true)
 	{
-		//UpdateBVH_Node();
+		// Only while something is culling with the tree.
+		//
+		// This was commented out, so renderers were inserted into the BVH once
+		// and never moved in it again. The entity block bounds right below are
+		// refreshed every frame, which is why the rest of the culling worked and
+		// only the tree was stale: it described where every object used to be.
+		//
+		// It is behind the toggle rather than simply switched back on because
+		// keeping a tree current for a fully dynamic scene is a real cost, and
+		// the point of the toggle is to find out whether it is worth paying.
+		if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled)
+		{
+			UpdateBVH_Node();
+		}
+
 		if(mCullingEntityBlockViewer.IsValid())
 		{
 			const physics::AABB3D* const aabb = ColliderUpdater<physics::AABB3D>::GetWorldCollider();
