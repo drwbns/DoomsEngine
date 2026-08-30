@@ -431,8 +431,16 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 
 			const FLOAT32 minU = entityBlock->mAABBMinScreenSpacePointX[entityIndex] / cullingWidth;
 			const FLOAT32 maxU = entityBlock->mAABBMaxScreenSpacePointX[entityIndex] / cullingWidth;
-			const FLOAT32 minV = entityBlock->mAABBMinScreenSpacePointY[entityIndex] / cullingHeight;
-			const FLOAT32 maxV = entityBlock->mAABBMaxScreenSpacePointY[entityIndex] / cullingHeight;
+			// Flipped, and the ends swapped with it.
+			//
+			// PreCulling produces screen Y as (ndc y + 1) * half height, and ndc
+			// y is positive upwards, so its origin is the bottom of the screen.
+			// The pyramid is a render target, whose first row is the top. Without
+			// this every object is tested against the mirror image of where it
+			// actually is, which culls things in empty sky because the ground
+			// below them is full of rock.
+			const FLOAT32 minV = 1.0f - (entityBlock->mAABBMaxScreenSpacePointY[entityIndex] / cullingHeight);
+			const FLOAT32 maxV = 1.0f - (entityBlock->mAABBMinScreenSpacePointY[entityIndex] / cullingHeight);
 
 			// Widened by a cell on every side. The depth being tested against is
 			// a frame or two old, so an object may have moved, or the camera may
