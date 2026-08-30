@@ -36,6 +36,11 @@ namespace dooms
 			// timestamps rather than cpu clocks. Zero until the first result
 			// comes back, which is a frame or two after the work was issued.
 			extern inline float GpuStatHiZBuildMilliseconds{ 0.0f };
+
+			// Cpu milliseconds spent testing every object against the read back
+			// pyramid. The counterpart to the gpu build time above: Hi-Z spends on
+			// both processors and only the pair of numbers describes its cost.
+			extern inline float CpuStatHiZTestMilliseconds{ 0.0f };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

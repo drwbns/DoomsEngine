@@ -20,6 +20,7 @@
 #include <Rendering/Culling/EveryCulling/DataType/EntityBlock.h>
 #include <Rendering/Culling/EveryCulling/CullingModule/MaskedSWOcclusionCulling/MaskedSWOcclusionCulling.h>
 #include <cstring>
+#include <chrono>
 
 dooms::graphics::DeferredRenderingPipeLine::DeferredRenderingPipeLine
 (
@@ -483,6 +484,8 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 		return;
 	}
 
+	const std::chrono::steady_clock::time_point testStartTime = std::chrono::steady_clock::now();
+
 	UINT32 testedCount = 0;
 	UINT32 culledAsRawCount = 0;
 
@@ -576,6 +579,10 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 			}
 		}
 	}
+
+	graphicsSetting::CpuStatHiZTestMilliseconds = static_cast<FLOAT32>(
+		std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+			std::chrono::steady_clock::now() - testStartTime).count());
 
 	if ((mHiZFrameCounter % 300) == 0 && testedCount > 0)
 	{

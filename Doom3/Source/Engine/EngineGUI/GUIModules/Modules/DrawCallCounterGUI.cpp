@@ -5,6 +5,9 @@
 #include <Rendering//RenderingDebugger/RenderingDebugger.h>
 #include <Graphics/GraphicsAPI/GraphicsAPI.h>
 #include <Graphics/graphicsSetting.h>
+#include <DObject/DObjectGlobals.h>
+#include <Rendering/Pipeline/GraphicsPipeLine.h>
+#include <Rendering/Pipeline/PipeLines/DefaultGraphcisPipeLine.h>
 
 void dooms::ui::DrawCallCounterGUI::Init()
 {
@@ -36,6 +39,33 @@ void dooms::ui::DrawCallCounterGUI::Render()
 		if (dooms::graphics::graphicsSetting::GpuStatHiZBuildMilliseconds > 0.0f)
 		{
 			ImGui::Text("Hi-Z build : %.3f ms (GPU)", dooms::graphics::graphicsSetting::GpuStatHiZBuildMilliseconds);
+		}
+
+		if (dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds > 0.0f)
+		{
+			ImGui::Text("Hi-Z test  : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds);
+		}
+
+		// Per module cpu time, straight from EveryCulling's own profiler.
+		//
+		// It has been recording this all along, but the only thing reading it is
+		// compiled out behind a macro that is never defined, so the numbers were
+		// produced every frame and thrown away. Read here instead: comparing two
+		// techniques means seeing what each costs beside what each removes.
+		dooms::graphics::DefaultGraphcisPipeLine* const pipeLine
+			= dooms::CastTo<dooms::graphics::DefaultGraphcisPipeLine*>(dooms::graphics::GraphicsPipeLine::GetSingleton());
+
+		if (IsValid(pipeLine) && pipeLine->mRenderingCullingManager.mCullingSystem != nullptr)
+		{
+			ImGui::Separator();
+
+			for (const auto& profilingData : pipeLine->mRenderingCullingManager.mCullingSystem->mEveryCullingProfiler.GetProfilingDatas())
+			{
+				ImGui::Text("%.*s : %.3f ms",
+					static_cast<int>(profilingData.first.size()),
+					profilingData.first.data(),
+					profilingData.second.mElapsedTime);
+			}
 		}
 	}
 	dooms::ui::enginePanel::EndPanel();
