@@ -24,6 +24,7 @@
 #include <DObject/DObjectGlobals.h>
 #include <Rendering/Pipeline/GraphicsPipeLine.h>
 #include <Rendering/Pipeline/PipeLines/DefaultGraphcisPipeLine.h>
+#include <Game/GameCore.h>
 
 bool dooms::ui::EngineGUIServer::DestroyImgui()
 {
@@ -371,23 +372,29 @@ namespace
     {
         const char* mName;
         bool mIsViewFrustumEnabled;
-        bool mIsDistanceEnabled;
         bool mIsMaskedSWOcclusionEnabled;
         bool mIsHiZEnabled;
     };
 
+    // Distance culling is deliberately not one of the modes below.
+    //
+    // It is an independent axis: it answers a different question from which
+    // occlusion technique is running, and folding it into the cycle meant some
+    // modes had it and others did not, so two of them could never be compared
+    // without wondering whether the difference was the technique or the
+    // distance cut. Applied on top of whichever mode is selected, so every
+    // comparison is like for like by construction.
+    bool gIsDistanceCullingEnabled = false;
+
     const OcclusionMode gOcclusionModes[] =
     {
-        { "All",                 true,  true,  true,  false },
-        { "None",                false, false, false, false },
-        { "Frustum only",        true,  false, false, false },
-        { "Frustum + Distance",  true,  true,  false, false },
-        { "Frustum + Occlusion", true,  false, true,  false },
+        { "None",                  false, false, false },
+        { "Frustum",               true,  false, false },
 
-        // The gpu technique, against the software one above it. Both are
-        // occlusion culling, so they are listed apart rather than combined:
+        // The two occlusion techniques, listed apart rather than combined:
         // running them together would measure neither.
-        { "Frustum + Hi-Z",      true,  false, false, true  }
+        { "Frustum + SW occlusion", true, true,  false },
+        { "Frustum + Hi-Z",         true, false, true  }
     };
 
     constexpr INT32 gOcclusionModeCount
@@ -418,7 +425,7 @@ namespace
         cullingSystem->SetEnabledCullingModule(
             culling::EveryCulling::CullingModuleType::ViewFrustumCulling, occlusionMode.mIsViewFrustumEnabled);
         cullingSystem->SetEnabledCullingModule(
-            culling::EveryCulling::CullingModuleType::DistanceCulling, occlusionMode.mIsDistanceEnabled);
+            culling::EveryCulling::CullingModuleType::DistanceCulling, gIsDistanceCullingEnabled);
         cullingSystem->SetEnabledCullingModule(
             culling::EveryCulling::CullingModuleType::MaskedSWOcclusionCulling, occlusionMode.mIsMaskedSWOcclusionEnabled);
 
@@ -462,6 +469,19 @@ namespace
         {
             ImGui::TextDisabled("F6 cycles: %s", gVisualisationCycle[gVisualisationCycleIndex].mName);
             ImGui::TextDisabled("F7 culling: %s", gOcclusionModes[gOcclusionModeIndex].mName);
+
+            // Sits with the culling readouts rather than the visualisation
+            // toggles, because it changes what is drawn, not how it is shown.
+            if (ImGui::Checkbox("Distance culling", &gIsDistanceCullingEnabled))
+            {
+                // Re-applied through the mode, which is what actually reaches
+                // the culling system.
+                ApplyOcclusionModeIndex(gOcclusionModeIndex);
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            {
+                ImGui::SetTooltip("%s", "applies to every culling mode, so they stay comparable");
+            }
             ImGui::TextDisabled("F8 render: %s", gRenderModes[gRenderModeIndex].mName);
 
             VisualisationToggle(
@@ -785,6 +805,15 @@ void dooms::ui::EngineGUIServer::Update()
             ShowNotification("Display: %s",
                 (dooms::graphics::GraphicsAPI::IsBorderlessFullscreen() != 0) ? "Fullscreen" : "Windowed");
         }
+    }
+
+    // F5 holds the scene still, so two culling modes can be measured against
+    // the same frame instead of two different ones.
+    if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F5))
+    {
+        dooms::GameCore::bmIsScenePaused = !dooms::GameCore::bmIsScenePaused;
+
+        ShowNotification("Scene: %s", dooms::GameCore::bmIsScenePaused ? "Paused" : "Running");
     }
 
     // F6 steps through the visualisations one at a time, starting from off.

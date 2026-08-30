@@ -22,14 +22,10 @@ void dooms::OverDrawVisualizationDebugger::ShowIsSortObjectFrontToBack()
 
 void dooms::OverDrawVisualizationDebugger::UpdateComponent()
 {
-	if (dooms::userinput::UserInput_Server::GetKeyUp(dooms::input::GraphicsAPIInput::eKEY_CODE::KEY_F5))
-	{
-		dooms::graphics::graphicsSetting::IsSortObjectFrontToBack = !dooms::graphics::graphicsSetting::IsSortObjectFrontToBack;
-		ShowIsSortObjectFrontToBack();
-
-	}
-
-	// F6 used to toggle overdraw from here. It now belongs to the visualisation
-	// cycle in EngineGUIServer, which owns every one of these toggles, so having
-	// it here as well would fight with that.
+	// F5 used to toggle front to back sorting from here, and F6 overdraw. Both
+	// are checkboxes on the visualisation panel now, and F5 pauses the scene, so
+	// leaving these would fight with the keys that own them.
+	//
+	// This is also why they had to move: a component that only exists in one
+	// demo scene is no place to keep engine wide shortcuts.
 }

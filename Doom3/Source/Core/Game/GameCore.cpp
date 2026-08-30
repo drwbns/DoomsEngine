@@ -195,14 +195,20 @@ void dooms::GameCore::Update()
 	mTime_Server.Update();
 	D_END_PROFILING(mTime_Server_Update);
 
-	D_START_PROFILING(mPhysics_Server_Update, eProfileLayers::CPU);
-	mPhysics_Server.Update_Internal();
-	mPhysics_Server.Update();
-	D_END_PROFILING(mPhysics_Server_Update);
+	// Everything that makes the scene change sits behind the pause. Rendering
+	// and the interface do not, so the frame can still be looked at, culling
+	// modes switched, and views cycled while it is held still.
+	if (bmIsScenePaused == false)
+	{
+		D_START_PROFILING(mPhysics_Server_Update, eProfileLayers::CPU);
+		mPhysics_Server.Update_Internal();
+		mPhysics_Server.Update();
+		D_END_PROFILING(mPhysics_Server_Update);
 
-	D_START_PROFILING(mSceneManager_Update, eProfileLayers::CPU);
-	mSceneManager.Update(); // Update plain Components ( Game Logic )
-	D_END_PROFILING(mSceneManager_Update);
+		D_START_PROFILING(mSceneManager_Update, eProfileLayers::CPU);
+		mSceneManager.Update(); // Update plain Components ( Game Logic )
+		D_END_PROFILING(mSceneManager_Update);
+	}
 
 	D_START_PROFILING(mGraphics_Server_Update, eProfileLayers::CPU);
 	mGraphics_Server.Update_Internal();

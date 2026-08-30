@@ -100,6 +100,20 @@ namespace dooms
 		D_PROPERTY()
 		ConfigData mGameConfigData;
 
+		/// <summary>
+		/// Stops game logic and physics from advancing, while rendering carries
+		/// on as normal.
+		///
+		/// Comparing two culling techniques means putting the same frame through
+		/// both. Without this the camera and the objects keep moving between one
+		/// measurement and the next, and the difference between the numbers says
+		/// more about where things drifted to than about the techniques.
+		///
+		/// It stops the camera as well, deliberately: a comparison across two
+		/// viewpoints is not a comparison.
+		/// </summary>
+		static inline bool bmIsScenePaused{ false };
+
 		GameCore();
 		GameCore(const GameCore&) = delete;
 		GameCore(GameCore&&) = delete;
