@@ -1,5 +1,7 @@
 #include "DefaultGraphcisPipeLine.h"
 
+#include <chrono>
+
 #include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
 
 #include <Graphics/graphicsSetting.h>
@@ -18,11 +20,17 @@
 
 void dooms::graphics::DefaultGraphcisPipeLine::PreRenderRenderer()
 {
+	const std::chrono::steady_clock::time_point preRenderStartTime = std::chrono::steady_clock::now();
+
 	const std::vector<Renderer*>& renderersInLayer = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
 	for (Renderer* renderer : renderersInLayer)
 	{
 		renderer->PreRender();
 	}
+
+	graphicsSetting::CpuStatPreRenderRendererMilliseconds = static_cast<FLOAT32>(
+		std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+			std::chrono::steady_clock::now() - preRenderStartTime).count());
 }
 
 

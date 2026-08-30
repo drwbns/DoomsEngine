@@ -962,6 +962,27 @@ void dooms::ui::EngineGUIServer::Update()
         ShowNotification("Render mode: %s", gRenderModes[gRenderModeIndex].mName);
     }
 
+    // B toggles the BVH, so the two frustum implementations can be swapped
+    // while flying rather than by finding a checkbox.
+    //
+    // Guarded on keyboard capture, unlike the function keys above: this is a
+    // letter, and the inspector has text fields that would otherwise toggle
+    // culling every time someone typed a b into one.
+    if (ImGui::GetIO().WantCaptureKeyboard == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_B))
+    {
+        dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled = !dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled;
+
+        // Both of these are what the checkbox does, and both matter: the mode
+        // decides whether the per object module runs beside the tree, and the
+        // refresh stops the tree culling against where objects used to be.
+        ApplyOcclusionModeIndex(gOcclusionModeIndex);
+        dooms::graphics::graphicsSetting::IsBVHFullRefreshRequested = true;
+
+        ShowNotification("BVH culling: %s",
+            dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled ? "On" : "Off");
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {

@@ -66,6 +66,16 @@ namespace dooms
 			// here is the tree culling something visible, which is precisely the
 			// failure that stale bounds produced, and it should read zero.
 			extern inline unsigned int CullStatBVHDisagreementCount{ 0 };
+
+			// Wall time of the per renderer pre render pass.
+			//
+			// Here because the BVH's real price is not its traversal but keeping
+			// the tree current, which happens in that pass and so appeared in no
+			// timer at all: the overlay reported a few milliseconds for a change
+			// that cost a hundred and seventy. Measured for the whole pass rather
+			// than per renderer, because timing 5806 objects individually costs
+			// more than the thing being timed.
+			extern inline float CpuStatPreRenderRendererMilliseconds{ 0.0f };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

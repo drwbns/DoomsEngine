@@ -164,44 +164,42 @@ occludes and the information was free.
 
 ### Hierarchical culling over the BVH does not pay here
 
-Implemented behind a toggle and measured on one frozen frame of 5806 objects.
-Correct, and slower by a factor of forty.
+Implemented behind a toggle, bound to **B**, and measured against the per object
+module it replaces. Correct, and roughly two thousand times more expensive.
 
-| | culled | draws | frustum cost | fps |
+| | PreRender | BVH traversal | frustum module | fps |
 | --- | --- | --- | --- | --- |
-| per object frustum module | 5601 | 217 | 0.050 ms | 141 |
-| BVH tree traversal | 5610 | 208 | 1.97 ms | 112 |
+| tree off | 4.9 ms | | 0.086 ms | 55 |
+| tree on | 164 ms | 4.0 ms | 0 ms | 5.5 |
 
-Both render the same image, verified at SSIM 1.000000, and the audit described
-below reports zero objects rejected by the tree that the frustum accepts. The
-tree is in fact slightly *tighter* than the module — those nine objects are
-genuinely outside the frustum and contribute no pixels — so this is a real
-comparison between two correct implementations, not a bug.
+Both render the same image, verified at SSIM 1.000000, and the audit reports
+zero objects rejected by the tree that the frustum accepts. The tree is in fact
+slightly *tighter* than the module. This is a comparison between two correct
+implementations.
 
-Two reasons it loses, and only one of them is the build:
+**The traversal was never the problem.** It is the 4 ms column, and even that is
+beatable. The cost is keeping the tree current: 159 ms per frame, to save the
+0.086 ms of frustum culling it replaces. Every one of 5806 objects moves every
+frame, and each one removes and reinserts itself, restructuring the tree as it
+goes. A BVH is an acceleration structure for scenes that mostly hold still, and
+nothing in this scene holds still.
 
-- **The traversal saves work the implementation then spends anyway.** Rejecting
-  a subtree avoids testing its objects, but the results are still applied by
-  looping over all 5806 renderers to ask each one whether its node survived.
-  The pass is O(objects) regardless of how much the tree pruned, so the
-  asymptotic win never arrives. Fixing this means walking surviving leaves
-  rather than polling every renderer.
-- **It is scalar C++ against SIMD across threads.** `ViewFrustumCulling` is
-  vectorised and multithreaded; the traversal is a pointer-chasing loop with a
-  `std::vector<bool>` cleared to node capacity every frame. This is a Debug
-  build, which punishes that shape far more than the code it is competing with,
-  so the forty times figure is an upper bound on the gap, not a measurement of
-  it. **Re-measure in Release before treating the margin as real.**
+This was measured wrong the first time and the mistake is worth recording. The
+first pass ran on a frame paused with F5, where no transform is dirty, so
+maintenance never ran and the tree looked merely forty times too slow. Freezing
+the scene is the right way to compare culling *results*, and the wrong way to
+compare culling *costs*, because it silently zeroes the cost of staying current.
+The `PreRender` timer exists now so that cost can never hide again: it was
+invisible before, since the only BVH timer covered the traversal.
 
-The honest conclusion for this scene is narrower than "BVHs are slow": 5806
-objects spread evenly through the view give few subtrees that fall wholly
-outside the frustum, which is the only case the hierarchy is paid for. The
-technique wants either far more objects or far more spatial clustering than
-this scene has.
+Two conclusions, and only the first is about BVHs:
 
-The maintenance cost is not in the number above. Keeping the tree current runs
-in `Renderer::PreRender`, and the frame it was measured on was paused, so
-nothing was dirty and it was free. In a moving scene it is not.
+- Hierarchical frustum culling wants static or slow geometry, far more objects,
+  or a per object test expensive enough to be worth avoiding. This scene offers
+  none of the three, and `ViewFrustumCulling` at 0.086 ms leaves nothing to win.
+- `PreRender` costs 4.9 ms even with the tree off, which is ten times the entire
+  culling budget beneath it. That is the entity block bounds update for every
+  renderer, and it is now the largest CPU cost in the frame that is not drawing.
 
 ## Next
 
@@ -212,7 +210,9 @@ nothing was dirty and it was free. In a moving scene it is not.
    current implementation covers with a one cell margin.
 3. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
-4. **Re-measure everything in Release.** Every number in this document is from a
+4. **`PreRender` at 4.9 ms**, ten times the culling budget it feeds. Every
+   renderer rewrites its world bounds every frame whether or not it moved.
+5. **Re-measure everything in Release.** Every number in this document is from a
    Debug build, which is fine for comparing two techniques that are both scalar
    and unfair to the one that is not.
 
