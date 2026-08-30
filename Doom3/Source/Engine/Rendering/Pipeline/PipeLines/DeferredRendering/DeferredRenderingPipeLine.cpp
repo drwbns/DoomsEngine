@@ -613,6 +613,39 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 	}
 }
 
+namespace
+{
+	// Rejected against every plane using the box corner furthest along that
+	// plane's normal. If even that corner is behind the plane, nothing in the
+	// box is in front of it.
+	//
+	// Shared by the traversal and by the audit below so that a disagreement
+	// between them can only come from the bounds, never from two subtly
+	// different implementations of the same test.
+	bool IsAABBOutsideFrustum(
+		const std::array<math::Vector4, 6>& frustumPlanes,
+		const math::Vector3& lowerBound,
+		const math::Vector3& upperBound)
+	{
+		for (size_t planeIndex = 0; planeIndex < frustumPlanes.size(); planeIndex++)
+		{
+			const math::Vector4& plane = frustumPlanes[planeIndex];
+
+			const math::Vector3 furthestCorner(
+				(plane.x >= 0.0f) ? upperBound.x : lowerBound.x,
+				(plane.y >= 0.0f) ? upperBound.y : lowerBound.y,
+				(plane.z >= 0.0f) ? upperBound.z : lowerBound.z);
+
+			if ((plane.x * furthestCorner.x + plane.y * furthestCorner.y + plane.z * furthestCorner.z + plane.w) < 0.0f)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::ApplyBVHFrustumCulling(dooms::Camera* const targetCamera, const size_t cameraIndex)
 {
 	if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled == false)
@@ -653,24 +686,7 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyBVHFrustumCulling(dooms::C
 		// Rejected against every plane using the box corner furthest along that
 		// plane's normal. If even that corner is behind the plane, nothing in the
 		// box is in front of it, and nothing in the subtree can be visible.
-		bool bIsOutside = false;
-
-		for (size_t planeIndex = 0; planeIndex < frustumPlanes.size() && bIsOutside == false; planeIndex++)
-		{
-			const math::Vector4& plane = frustumPlanes[planeIndex];
-
-			const math::Vector3 furthestCorner(
-				(plane.x >= 0.0f) ? upperBound.x : lowerBound.x,
-				(plane.y >= 0.0f) ? upperBound.y : lowerBound.y,
-				(plane.z >= 0.0f) ? upperBound.z : lowerBound.z);
-
-			if ((plane.x * furthestCorner.x + plane.y * furthestCorner.y + plane.z * furthestCorner.z + plane.w) < 0.0f)
-			{
-				bIsOutside = true;
-			}
-		}
-
-		if (bIsOutside)
+		if (IsAABBOutsideFrustum(frustumPlanes, lowerBound, upperBound))
 		{
 			// The whole subtree goes with it. This is the saving: one test
 			// instead of one per object underneath.
@@ -697,6 +713,8 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyBVHFrustumCulling(dooms::C
 	// tree has no way back to a renderer: leaves are inserted with a null
 	// collider, and nothing else identifies the owner.
 	const std::vector<Renderer*>& renderers = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
+
+	UINT32 disagreementCount = 0;
 
 	for (Renderer* const renderer : renderers)
 	{
@@ -731,10 +749,41 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyBVHFrustumCulling(dooms::C
 
 			if (viewer.IsValid())
 			{
+				// Audited against the entity block's world bounds rather than
+				// against the other modules' verdict, because enabling the tree
+				// switches the per object frustum module off, so there is no
+				// second frustum opinion left to compare with.
+				//
+				// These bounds are rewritten every frame from the renderer's
+				// current transform, so they are the one description of where
+				// the object is now that the tree cannot have corrupted. Same
+				// planes, same test, current bounds: anything the tree rejects
+				// that this accepts is the tree culling a visible object.
+				const culling::EntityBlock* const entityBlock = viewer.GetTargetEntityBlock();
+				const UINT32 entityIndex = viewer.GetEntityIndexInBlock();
+
+				const culling::Vec4& minWorldPoint = entityBlock->mAABBMinWorldPoint[entityIndex];
+				const culling::Vec4& maxWorldPoint = entityBlock->mAABBMaxWorldPoint[entityIndex];
+
+				if (IsAABBOutsideFrustum(
+						frustumPlanes,
+						math::Vector3(minWorldPoint[0], minWorldPoint[1], minWorldPoint[2]),
+						math::Vector3(maxWorldPoint[0], maxWorldPoint[1], maxWorldPoint[2])) == false)
+				{
+					disagreementCount++;
+				}
+
 				viewer.GetTargetEntityBlock()->SetCulled(viewer.GetEntityIndexInBlock(), cameraIndex);
 			}
 		}
 	}
+
+	// Cleared here rather than where it is set, because every renderer's
+	// PreRender has run by this point in the frame, so all of them have had the
+	// chance to act on it exactly once.
+	graphicsSetting::IsBVHFullRefreshRequested = false;
+
+	graphicsSetting::CullStatBVHDisagreementCount = disagreementCount;
 
 	graphicsSetting::CpuStatBVHCullMilliseconds = static_cast<FLOAT32>(
 		std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(

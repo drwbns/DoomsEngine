@@ -49,6 +49,20 @@ void dooms::ui::DrawCallCounterGUI::Render()
 		if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled)
 		{
 			ImGui::Text("BVH cull   : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatBVHCullMilliseconds);
+
+			// Zero means the tree agrees with the per object test. Anything else
+			// means it is culling objects that are visible, so it is called out
+			// rather than left to be noticed on screen.
+			const unsigned int bvhDisagreements = dooms::graphics::graphicsSetting::CullStatBVHDisagreementCount;
+
+			if (bvhDisagreements > 0)
+			{
+				ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "BVH wrong  : %u", bvhDisagreements);
+			}
+			else
+			{
+				ImGui::Text("BVH wrong  : 0");
+			}
 		}
 
 		// Per module cpu time, straight from EveryCulling's own profiler.

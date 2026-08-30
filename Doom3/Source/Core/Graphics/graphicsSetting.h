@@ -46,7 +46,26 @@ namespace dooms
 			// instead of testing every object one at a time. A toggle rather than
 			// a replacement, so it can be measured against what it replaces.
 			extern inline bool IsBVHFrustumCullingEnabled{ false };
+
+			// Forces every renderer to push its current bounds into the tree on
+			// the next frame, regardless of whether its transform reports dirty.
+			//
+			// The tree is normally maintained from transform dirty flags, which
+			// means it only becomes correct for objects that have moved since it
+			// was last used. Switching culling on therefore has to start from a
+			// full refresh: otherwise the first frames cull against wherever
+			// objects were when the tree last ran, and while the scene is paused
+			// nothing is dirty at all, so it would never correct itself.
+			extern inline bool IsBVHFullRefreshRequested{ true };
 			extern inline float CpuStatBVHCullMilliseconds{ 0.0f };
+
+			// Objects the tree rejected that the per object frustum test kept.
+			//
+			// Both test the same boxes against the same frustum, so the tree can
+			// only ever cull a subset of what the per object pass culls. Anything
+			// here is the tree culling something visible, which is precisely the
+			// failure that stale bounds produced, and it should read zero.
+			extern inline unsigned int CullStatBVHDisagreementCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

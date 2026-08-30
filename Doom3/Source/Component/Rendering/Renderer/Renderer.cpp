@@ -192,6 +192,14 @@ void dooms::Renderer::PreRender()
 		// the point of the toggle is to find out whether it is worth paying.
 		if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled)
 		{
+			if (dooms::graphics::graphicsSetting::IsBVHFullRefreshRequested)
+			{
+				// UpdateBVH_Node is dirty gated, so it is given something to
+				// react to. Marking the receiver is what the collider itself
+				// does when its local bounds change.
+				BVH_AABB3D_Node_Object::IsWorldColliderCacheDirty = true;
+			}
+
 			UpdateBVH_Node();
 		}
 

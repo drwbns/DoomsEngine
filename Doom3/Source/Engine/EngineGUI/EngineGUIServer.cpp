@@ -41,7 +41,9 @@ bool dooms::ui::EngineGUIServer::DestroyImgui()
 // ---------------------------------------------------------------------------
 namespace
 {
-    dooms::ui::eEngineGUIDisplayMode gDisplayMode = dooms::ui::eEngineGUIDisplayMode::All;
+    // Starts hidden, so the engine opens on the scene with mouse look already
+    // on rather than behind a wall of panels. F1 brings them back.
+    dooms::ui::eEngineGUIDisplayMode gDisplayMode = dooms::ui::eEngineGUIDisplayMode::Hidden;
     char gFocusedPanelName[128] = "DrawCall";
     FLOAT32 gOverlayAlpha = 0.35f;
 
@@ -50,7 +52,11 @@ namespace
     bool gPanelWindowOpened = false;
 
     // Set by F4, cleared once the dockspace has rebuilt its layout.
-    bool gDockLayoutResetRequested = false;
+    //
+    // True at startup, so the first time the panels appear they are in the
+    // default arrangement rather than whatever imgui.ini remembered from a
+    // previous run, which is how panels ended up stacked over the scene.
+    bool gDockLayoutResetRequested = true;
 
     // The transient message shown when a mode is changed with an F key.
     //
@@ -400,9 +406,66 @@ namespace
     constexpr INT32 gOcclusionModeCount
         = static_cast<INT32>(sizeof(gOcclusionModes) / sizeof(gOcclusionModes[0]));
 
-    // Starts at "All", which is how the engine boots, so the label is honest
-    // before F7 is ever pressed.
+    // Corrected from the culling system on the first frame by
+    // SyncOcclusionModeFromEngine, because the engine does not boot from this
+    // table: config.ini and the demo component decide what is running.
     INT32 gOcclusionModeIndex = 0;
+
+    // Reads back what the culling system is actually running and points the
+    // labels at the matching entry.
+    //
+    // Without this the panel reported "culling: None" while five and a half
+    // thousand objects were being culled, because these values were only ever
+    // written by the interface and never compared against the engine. A harness
+    // whose readouts describe a state nobody selected is worse than no readout.
+    // Returns whether the culling system was there to be read, so the caller
+    // can keep trying rather than record a sync that never happened.
+    bool SyncOcclusionModeFromEngine()
+    {
+        dooms::graphics::DefaultGraphcisPipeLine* const pipeLine
+            = dooms::CastTo<dooms::graphics::DefaultGraphcisPipeLine*>(dooms::graphics::GraphicsPipeLine::GetSingleton());
+
+        if (IsValid(pipeLine) == false)
+        {
+            return false;
+        }
+
+        culling::EveryCulling* const cullingSystem = pipeLine->mRenderingCullingManager.mCullingSystem.get();
+        if (cullingSystem == nullptr)
+        {
+            return false;
+        }
+
+        using CullingModuleType = culling::EveryCulling::CullingModuleType;
+
+        gIsDistanceCullingEnabled
+            = cullingSystem->GetIsCullingModuleEnabled(CullingModuleType::DistanceCulling);
+
+        const bool bIsFrustumEnabled
+            = cullingSystem->GetIsCullingModuleEnabled(CullingModuleType::ViewFrustumCulling);
+        const bool bIsMaskedSWEnabled
+            = cullingSystem->GetIsCullingModuleEnabled(CullingModuleType::MaskedSWOcclusionCulling);
+        const bool bIsHiZEnabled
+            = dooms::graphics::graphicsSetting::IsHiZOcclusionCullingEnabled;
+
+        for (INT32 modeIndex = 0; modeIndex < gOcclusionModeCount; modeIndex++)
+        {
+            const OcclusionMode& occlusionMode = gOcclusionModes[modeIndex];
+
+            if (occlusionMode.mIsViewFrustumEnabled == bIsFrustumEnabled
+                && occlusionMode.mIsMaskedSWOcclusionEnabled == bIsMaskedSWEnabled
+                && occlusionMode.mIsHiZEnabled == bIsHiZEnabled)
+            {
+                gOcclusionModeIndex = modeIndex;
+                return true;
+            }
+        }
+
+        // No entry describes it, which is possible because config.ini can enable
+        // any combination. Left on whatever it was rather than asserting a mode
+        // that is not running, but still a completed read.
+        return true;
+    }
 
     void ApplyOcclusionModeIndex(const INT32 index)
     {
@@ -494,6 +557,11 @@ namespace
                 // Re-applied, because this decides whether the per object
                 // frustum module runs at all.
                 ApplyOcclusionModeIndex(gOcclusionModeIndex);
+
+                // The tree has been ignoring transform updates for however long
+                // it was switched off, so it starts from a full refresh rather
+                // than from whatever it happened to be holding.
+                graphicsSetting::IsBVHFullRefreshRequested = true;
             }
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
             {
@@ -607,6 +675,15 @@ namespace
 
 void dooms::ui::EngineGUIServer::PreRender()
 {
+    // Once, as late as the first frame, because the culling system does not
+    // exist when this translation unit's globals are initialised.
+    static bool bHasSyncedOcclusionMode = false;
+
+    if (bHasSyncedOcclusionMode == false)
+    {
+        bHasSyncedOcclusionMode = SyncOcclusionModeFromEngine();
+    }
+
     if (bmIsEngineGUIAvaliable == true)
     {
         graphics::PlatformImgui::PreRenderPlatformImgui();
