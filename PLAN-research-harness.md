@@ -443,28 +443,49 @@ detail by projected screen error rather than by authored distance bands, and
 this scene has only 15 distinct meshes to build detail levels for. What is
 given up without the cluster hierarchy is seamlessness: discrete levels pop.
 
+## Every technique, re-measured in Release
+
+Debug inflates cpu side driver work about three times and leaves gpu work
+alone, which is enough to invert the ranking of almost everything in this
+document. Each row below is one frozen frame with the toggle as the only
+change, and the Debug column is what this document said before.
+
+| technique | Debug | Release |
+| --- | --- | --- |
+| level of detail | slower | **2.706 to 1.949 ms, 339 to 458 fps** |
+| group draws by state | 14.21 to 16.11 ms, a loss | **2.706 to 2.575 ms, 339 to 355 fps** |
+| convex hull occludee | 5.7 ms cpu to save 0.8 ms | **2.042 to 1.724 ms, 440 to 511 fps** |
+| depth pre pass | a loss | still a loss, 339 to 251 fps |
+
+Three of four inverted. The one that did not is the pre pass, which doubles
+geometry submission and is expensive under any build.
+
+Fitting the level of detail pair: geometry is about **0.15 us per draw plus
+0.56 ms per million triangles**, so on a 4.2 ms pass triangles account for 3.7
+and draw submission for 0.5. Under Debug the same fit put draw submission in
+front, which is why level of detail looked worthless and instancing looked like
+the biggest prize on the board. Neither was true.
+
+**What this costs the rest of the document.** Every conclusion above this
+section was measured in Debug. The ones about culling *quality* stand, because
+counts of objects and waste do not depend on the build: the oracle's 1450
+visible objects, the Hi-Z grid sweep taking waste from 60% to 49%, the hull
+halving what the box leaves. The ones about *cost* do not stand, and the
+per draw figures in particular are roughly three times too large.
+
 ## Next
 
-1. **Tests around the culling math**, per phase 5 below. The V flip was caught by
-   eye, and the BVH staleness by a screenshot; the audit added for the BVH is the
-   first check in the harness that does not need a human looking at it.
-2. **Two-phase occlusion culling.** The principled fix for the staleness that the
-   current implementation covers with a one cell margin.
-3. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
-   unordered access views and indirect draw, none of which the backend has.
-4. **Level of detail for the rock meshes.** 7.85 M triangles for 0.92 M pixels
-   is the largest measured cost in the frame by an order of magnitude, and
-   nothing else on this list competes with it.
-5. **Instancing**, now measured as worth under a millisecond and therefore not
-   the priority it looked like before the binds were priced.
-6. **`PreRender`**, now 0.16 ms on a still frame after skipping unmoved objects,
-   and still around 3 ms while everything moves and 1.0 ms while it
-   is paused. The 3.9 ms difference is recomputing a world AABB per moving
-   object; the 1.0 ms floor is copying bounds and a matrix into the entity block
-   for all 5806 whether or not they moved.
-7. **Re-measure everything in Release.** Every number in this document is from a
-   Debug build, which is fine for comparing two techniques that are both scalar
-   and unfair to the one that is not.
+1. **Put level zero in the shared vertex buffer** so a mesh never rebinds
+   between full detail and a coarse level. Binds are 676 without detail levels
+   and 1258 with, entirely from alternating between the two buffers.
+2. **Re-measure the Hi-Z grid sweep and the polygon silhouette in Release.**
+   Both were judged in Debug and both are cpu heavy, which is exactly the class
+   that inverted.
+3. **Tests around the culling math**, still the only item on this list with no
+   measurements behind it at all.
+4. **Instancing**, now worth about half a millisecond rather than ten, and
+   therefore behind everything above it.
+
 
 ## Deliberately out of scope
 
