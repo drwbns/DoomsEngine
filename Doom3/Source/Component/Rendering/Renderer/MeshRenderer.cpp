@@ -89,6 +89,7 @@ void dooms::MeshRenderer::Draw()
 		// The bounds PreCulling already produced, so choosing a level costs a
 		// subtraction and a multiply rather than anything of its own.
 		const graphics::MeshLodLevel* lodLevel = nullptr;
+		const graphics::MeshLodChain* lodChain = nullptr;
 
 		if (graphics::graphicsSetting::IsMeshLodEnabled && mCullingEntityBlockViewer.IsValid())
 		{
@@ -103,14 +104,14 @@ void dooms::MeshRenderer::Draw()
 			const FLOAT32 coveredPixelCount =
 				((screenWidth > 0.0f) ? screenWidth : 0.0f) * ((screenHeight > 0.0f) ? screenHeight : 0.0f);
 
-			lodLevel = graphics::SelectMeshLod(mTargetMesh, coveredPixelCount);
+			lodLevel = graphics::SelectMeshLod(mTargetMesh, coveredPixelCount, &lodChain);
 		}
 
-		if (lodLevel != nullptr)
+		if (lodLevel != nullptr && lodChain != nullptr)
 		{
 			mTargetMesh->DrawWithLodBuffers(
-				lodLevel->mVertexBuffer,
-				lodLevel->mLayoutOffsets,
+				lodChain->mSharedVertexBuffer,
+				lodChain->mLayoutOffsets,
 				lodLevel->mIndexBuffer,
 				lodLevel->mIndexCount);
 		}

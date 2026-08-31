@@ -44,9 +44,7 @@ namespace dooms
 			/// prefetch, and loses the reuse that had each vertex serving six
 			/// triangles. Cutting triangles by 73% made the pass 32% slower.
 			/// </summary>
-			BufferID mVertexBuffer{};
 			unsigned long long mVertexCount{ 0 };
-			unsigned int mLayoutOffsets[5]{ 0, 0, 0, 0, 0 };
 		};
 
 		/// <summary>
@@ -56,6 +54,25 @@ namespace dooms
 		struct MeshLodChain
 		{
 			std::vector<MeshLodLevel> mLevels;
+
+			/// <summary>
+			/// One vertex buffer for every level of the mesh, laid out per
+			/// attribute across all of them: all positions, then all texture
+			/// coordinates, and so on, with each level occupying a contiguous
+			/// run inside each attribute.
+			///
+			/// That arrangement is the whole point. Attribute offsets depend
+			/// only on the total vertex count, so they are identical for every
+			/// level, which means switching level does not rebind the vertex
+			/// buffer. A buffer per level was tried first and cost more in binds
+			/// than the triangles it saved: 1035 mesh binds became 2672, and
+			/// each of those rebinds five attribute slots. Each level's indices
+			/// are written already offset into its own run, so only the index
+			/// buffer changes between levels.
+			/// </summary>
+			BufferID mSharedVertexBuffer{};
+			unsigned int mLayoutOffsets[5]{ 0, 0, 0, 0, 0 };
+
 			bool bmIsBuilt{ false };
 		};
 
@@ -69,7 +86,7 @@ namespace dooms
 		/// object covers, which is the point past which more geometry cannot be
 		/// resolved. Returns null when the mesh should be drawn at full detail.
 		/// </summary>
-		const MeshLodLevel* SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount);
+		const MeshLodLevel* SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount, const MeshLodChain** outChain);
 
 		/// <summary>
 		/// Meshes with levels, and levels built, for the overlay.

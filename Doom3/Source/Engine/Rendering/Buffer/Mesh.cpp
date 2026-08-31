@@ -626,20 +626,25 @@ void dooms::graphics::Mesh::DrawWithLodBuffers(
 		return;
 	}
 
-	// A different buffer entirely, so the mesh bind cache cannot vouch for what
-	// is bound and the next full detail draw has to rebind.
-	ResetBoundMeshCache();
-	MESH_BIND_COUNT++;
-
-	for (UINT32 bufferLayoutIndex = 0; bufferLayoutIndex < mVertexBufferLayoutCount; bufferLayoutIndex++)
+	// Every level of a mesh shares this buffer, so consecutive objects drawing
+	// the same mesh at different levels do not rebind it.
+	if (BOUND_VERTEX_BUFFER_ID[0] != vertexBuffer.GetBufferID())
 	{
-		BOUND_VERTEX_BUFFER_ID[bufferLayoutIndex] = vertexBuffer;
+		// Not the mesh's own buffer, so the cache can no longer vouch for it and
+		// the next full detail draw must rebind.
+		ResetBoundMeshCache();
+		MESH_BIND_COUNT++;
 
-		GraphicsAPI::BindVertexDataBuffer(
-			vertexBuffer,
-			bufferLayoutIndex,
-			mVertexBufferLayouts[bufferLayoutIndex].mStride,
-			layoutOffsets[bufferLayoutIndex]);
+		for (UINT32 bufferLayoutIndex = 0; bufferLayoutIndex < mVertexBufferLayoutCount; bufferLayoutIndex++)
+		{
+			BOUND_VERTEX_BUFFER_ID[bufferLayoutIndex] = vertexBuffer;
+
+			GraphicsAPI::BindVertexDataBuffer(
+				vertexBuffer,
+				bufferLayoutIndex,
+				mVertexBufferLayouts[bufferLayoutIndex].mStride,
+				layoutOffsets[bufferLayoutIndex]);
+		}
 	}
 
 	if (BOUND_INDEX_BUFFER_ID != indexBuffer.GetBufferID())

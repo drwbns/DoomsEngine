@@ -132,6 +132,17 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 
 	if (modelMesh != nullptr && modelMesh->mMeshIndices.empty() == false)
 	{
+		// Every level is prepared before anything is uploaded, because they all
+		// share one buffer and its size is not known until the last of them has
+		// decided how many vertices it keeps.
+		struct PreparedLevel
+		{
+			std::vector<UINT32> mIndices;
+			std::vector<UINT32> mOriginalVertexIndices;
+		};
+
+		std::vector<PreparedLevel> preparedLevels;
+
 		// Roughly a quarter of the triangles at each step, which is about one
 		// level per halving of the object's size on screen.
 		const unsigned int gridResolutions[3] = { 24, 12, 6 };
@@ -148,45 +159,55 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 				break;
 			}
 
-			// Not enough of a saving to be worth a buffer and a level.
+			// Not enough of a saving to be worth a level.
 			if (simplifiedIndices.size() * 10 > previousIndexCount * 8)
 			{
 				continue;
 			}
 
-			// The vertices this level actually uses, gathered and renumbered.
-			//
-			// Without this the level indexes scattered positions in the full
-			// buffer, which measured slower than drawing the whole mesh. Packed
-			// densely, the fetches are sequential again and a vertex serves
-			// several triangles again.
+			// The vertices this level actually uses, gathered and renumbered, so
+			// its indices run densely over a small range instead of pointing at
+			// scattered positions in the full buffer. Sharing the mesh's buffer
+			// was measured and was slower than drawing the whole mesh.
+			PreparedLevel prepared;
 			std::unordered_map<UINT32, UINT32> compactedIndexForOriginal;
-			std::vector<UINT32> originalForCompacted;
 
 			compactedIndexForOriginal.reserve(simplifiedIndices.size());
-			originalForCompacted.reserve(simplifiedIndices.size());
+			prepared.mOriginalVertexIndices.reserve(simplifiedIndices.size());
 
 			for (UINT32& index : simplifiedIndices)
 			{
 				const auto inserted = compactedIndexForOriginal.emplace(
-					index, static_cast<UINT32>(originalForCompacted.size()));
+					index, static_cast<UINT32>(prepared.mOriginalVertexIndices.size()));
 
 				if (inserted.second)
 				{
-					originalForCompacted.push_back(index);
+					prepared.mOriginalVertexIndices.push_back(index);
 				}
 
 				index = inserted.first->second;
 			}
 
-			// Five contiguous arrays of Vector3, exactly as MeshData lays them
-			// out, so the offsets can be computed the same way the mesh's own
-			// are. They differ from the mesh's because they depend on how many
-			// vertices come before each array.
-			const size_t compactedVertexCount = originalForCompacted.size();
-			const size_t attributeSize = sizeof(math::Vector3) * compactedVertexCount;
+			prepared.mIndices = std::move(simplifiedIndices);
 
-			std::vector<char> compactedVertexData(attributeSize * 5);
+			previousIndexCount = prepared.mIndices.size();
+			preparedLevels.push_back(std::move(prepared));
+		}
+
+		if (preparedLevels.empty() == false)
+		{
+			size_t totalVertexCount = 0;
+			for (const PreparedLevel& prepared : preparedLevels)
+			{
+				totalVertexCount += prepared.mOriginalVertexIndices.size();
+			}
+
+			// Five contiguous arrays of Vector3, the same layout MeshData uses,
+			// sized for every level at once. The offsets therefore depend only
+			// on the total and are the same whichever level is being drawn.
+			const size_t attributeSize = sizeof(math::Vector3) * totalVertexCount;
+
+			std::vector<char> sharedVertexData(attributeSize * 5);
 
 			const math::Vector3* const sourceAttributes[5] =
 			{
@@ -197,72 +218,94 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 				modelMesh->mMeshDatas.mBitangent
 			};
 
-			for (size_t attributeIndex = 0; attributeIndex < 5; attributeIndex++)
+			size_t levelVertexBase = 0;
+
+			for (PreparedLevel& prepared : preparedLevels)
 			{
-				if (sourceAttributes[attributeIndex] == nullptr)
+				for (size_t attributeIndex = 0; attributeIndex < 5; attributeIndex++)
 				{
-					continue;
+					if (sourceAttributes[attributeIndex] == nullptr)
+					{
+						continue;
+					}
+
+					math::Vector3* const destination =
+						reinterpret_cast<math::Vector3*>(sharedVertexData.data() + attributeSize * attributeIndex);
+
+					for (size_t vertexIndex = 0; vertexIndex < prepared.mOriginalVertexIndices.size(); vertexIndex++)
+					{
+						destination[levelVertexBase + vertexIndex] =
+							sourceAttributes[attributeIndex][prepared.mOriginalVertexIndices[vertexIndex]];
+					}
 				}
 
-				math::Vector3* const destination =
-					reinterpret_cast<math::Vector3*>(compactedVertexData.data() + attributeSize * attributeIndex);
-
-				for (size_t vertexIndex = 0; vertexIndex < compactedVertexCount; vertexIndex++)
+				// Written already offset into this level's run, which is what
+				// lets every level share one binding.
+				for (UINT32& index : prepared.mIndices)
 				{
-					destination[vertexIndex] = sourceAttributes[attributeIndex][originalForCompacted[vertexIndex]];
+					index += static_cast<UINT32>(levelVertexBase);
 				}
+
+				levelVertexBase += prepared.mOriginalVertexIndices.size();
 			}
 
-			// Nothing but gpu buffers are created here. Constructing engine
-			// objects part way through a draw loop is what the first attempt at
-			// this did, and it took the process with it.
-			const BufferID indexBuffer = GraphicsAPI::CreateBufferObject(
-				GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER,
-				simplifiedIndices.size() * sizeof(UINT32),
-				nullptr,
-				false);
-
-			const BufferID vertexBuffer = GraphicsAPI::CreateBufferObject(
+			const BufferID sharedVertexBuffer = GraphicsAPI::CreateBufferObject(
 				GraphicsAPI::eBufferTarget::ARRAY_BUFFER,
-				compactedVertexData.size(),
-				compactedVertexData.data(),
+				sharedVertexData.size(),
+				sharedVertexData.data(),
 				false);
 
-			if (indexBuffer.IsValid() == false || vertexBuffer.IsValid() == false)
+			if (sharedVertexBuffer.IsValid())
 			{
-				break;
+				chain.mSharedVertexBuffer = sharedVertexBuffer;
+
+				for (size_t attributeIndex = 0; attributeIndex < 5; attributeIndex++)
+				{
+					chain.mLayoutOffsets[attributeIndex] = static_cast<unsigned int>(attributeSize * attributeIndex);
+				}
+
+				for (const PreparedLevel& prepared : preparedLevels)
+				{
+					const BufferID indexBuffer = GraphicsAPI::CreateBufferObject(
+						GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER,
+						prepared.mIndices.size() * sizeof(UINT32),
+						nullptr,
+						false);
+
+					if (indexBuffer.IsValid() == false)
+					{
+						break;
+					}
+
+					GraphicsAPI::UpdateDataToBuffer(
+						indexBuffer,
+						GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER,
+						0,
+						prepared.mIndices.size() * sizeof(UINT32),
+						reinterpret_cast<const void*>(prepared.mIndices.data()));
+
+					MeshLodLevel level;
+					level.mIndexBuffer = indexBuffer;
+					level.mIndexCount = prepared.mIndices.size();
+					level.mVertexCount = prepared.mOriginalVertexIndices.size();
+
+					chain.mLevels.push_back(level);
+					gTotalLevelCount++;
+				}
 			}
-
-			GraphicsAPI::UpdateDataToBuffer(
-				indexBuffer,
-				GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER,
-				0,
-				simplifiedIndices.size() * sizeof(UINT32),
-				reinterpret_cast<const void*>(simplifiedIndices.data()));
-
-			MeshLodLevel level;
-			level.mIndexBuffer = indexBuffer;
-			level.mIndexCount = simplifiedIndices.size();
-			level.mVertexBuffer = vertexBuffer;
-			level.mVertexCount = compactedVertexCount;
-
-			for (size_t attributeIndex = 0; attributeIndex < 5; attributeIndex++)
-			{
-				level.mLayoutOffsets[attributeIndex] = static_cast<unsigned int>(attributeSize * attributeIndex);
-			}
-
-			chain.mLevels.push_back(level);
-
-			previousIndexCount = level.mIndexCount;
-			gTotalLevelCount++;
 		}
 	}
 
 	return gMeshLodChains.emplace(mesh, std::move(chain)).first->second;
 }
 
-const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount)
+const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount, const MeshLodChain** outChain)
 {
+	if (outChain != nullptr)
+	{
+		*outChain = nullptr;
+	}
+
 	if (graphicsSetting::IsMeshLodEnabled == false || mesh == nullptr)
 	{
 		return nullptr;
@@ -270,9 +313,14 @@ const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* 
 
 	const MeshLodChain& chain = GetMeshLodChain(mesh);
 
-	if (chain.mLevels.empty())
+	if (chain.mLevels.empty() || chain.mSharedVertexBuffer.IsValid() == false)
 	{
 		return nullptr;
+	}
+
+	if (outChain != nullptr)
+	{
+		*outChain = &chain;
 	}
 
 	// One triangle per pixel is the point past which more geometry cannot be
