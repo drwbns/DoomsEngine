@@ -167,6 +167,10 @@ namespace dooms
 			extern inline bool IsHiZHullOccludeeEnabled{ false };
 			extern inline unsigned int CullStatHullMeshCount{ 0 };
 			extern inline unsigned int CullStatHullVertexCount{ 0 };
+
+			// Vertices kept per hull. The exact hull of a rock is around 740,
+			// which is unaffordable to project per object per frame.
+			extern inline unsigned int HiZHullVertexBudget{ 24 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

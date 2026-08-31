@@ -6,6 +6,7 @@
 
 #include <Rendering/Buffer/Mesh.h>
 #include <Asset/ThreeDModelAsset.h>
+#include <Graphics/graphicsSetting.h>
 
 namespace
 {
@@ -327,6 +328,148 @@ namespace
 		}
 	}
 
+	// Reduce a hull to a vertex budget without losing containment.
+	//
+	// Rocks are convex blobs, so nearly every mesh vertex lands on the hull and
+	// an exact hull costs as much to project as the mesh does. Vertices are
+	// bucketed by direction from the centroid and the furthest in each bucket is
+	// kept, which alone would produce a shape *inside* the original and cull
+	// visible objects. So every kept vertex is then pushed out from the centroid
+	// by the largest factor any dropped vertex needed, which restores
+	// containment at the cost of a slightly looser fit.
+	void DecimateHullConservatively(std::vector<math::Vector3>& hullVertices, const unsigned int vertexBudget)
+	{
+		if (hullVertices.size() <= vertexBudget || vertexBudget < 8)
+		{
+			return;
+		}
+
+		math::Vector3 centroid(0.0f, 0.0f, 0.0f);
+		for (const math::Vector3& vertex : hullVertices)
+		{
+			centroid.x += vertex.x;
+			centroid.y += vertex.y;
+			centroid.z += vertex.z;
+		}
+
+		const float inverseCount = 1.0f / static_cast<float>(hullVertices.size());
+		centroid.x *= inverseCount;
+		centroid.y *= inverseCount;
+		centroid.z *= inverseCount;
+
+		// Buckets over the sphere of directions, as a coarse latitude and
+		// longitude grid. Not equal area, which only means some buckets hold
+		// more than others, never that a direction is missed.
+		const int longitudeBucketCount = static_cast<int>(std::sqrt(static_cast<float>(vertexBudget) * 2.0f));
+		const int latitudeBucketCount = std::max(2, static_cast<int>(vertexBudget) / std::max(1, longitudeBucketCount));
+
+		std::vector<int> bestVertexPerBucket(static_cast<size_t>(longitudeBucketCount) * latitudeBucketCount, -1);
+		std::vector<float> bestDistancePerBucket(bestVertexPerBucket.size(), -1.0f);
+
+		std::vector<float> vertexDistances(hullVertices.size(), 0.0f);
+
+		for (size_t vertexIndex = 0; vertexIndex < hullVertices.size(); vertexIndex++)
+		{
+			const math::Vector3 offset = hullVertices[vertexIndex] - centroid;
+			const float distance = std::sqrt(offset.x * offset.x + offset.y * offset.y + offset.z * offset.z);
+
+			vertexDistances[vertexIndex] = distance;
+
+			if (distance <= 1e-12f)
+			{
+				continue;
+			}
+
+			const float latitude = std::acos(std::max(-1.0f, std::min(1.0f, offset.z / distance)));
+			const float longitude = std::atan2(offset.y, offset.x) + 3.14159265f;
+
+			int latitudeBucket = static_cast<int>(latitude / 3.14159265f * latitudeBucketCount);
+			int longitudeBucket = static_cast<int>(longitude / 6.28318531f * longitudeBucketCount);
+
+			latitudeBucket = std::max(0, std::min(latitudeBucketCount - 1, latitudeBucket));
+			longitudeBucket = std::max(0, std::min(longitudeBucketCount - 1, longitudeBucket));
+
+			const size_t bucket = static_cast<size_t>(latitudeBucket) * longitudeBucketCount + longitudeBucket;
+
+			if (distance > bestDistancePerBucket[bucket])
+			{
+				bestDistancePerBucket[bucket] = distance;
+				bestVertexPerBucket[bucket] = static_cast<int>(vertexIndex);
+			}
+		}
+
+		std::vector<math::Vector3> keptVertices;
+		std::vector<float> keptDistances;
+
+		for (size_t bucket = 0; bucket < bestVertexPerBucket.size(); bucket++)
+		{
+			if (bestVertexPerBucket[bucket] >= 0)
+			{
+				keptVertices.push_back(hullVertices[bestVertexPerBucket[bucket]]);
+				keptDistances.push_back(bestDistancePerBucket[bucket]);
+			}
+		}
+
+		if (keptVertices.size() < 4)
+		{
+			return;
+		}
+
+		// How far out the kept set has to move so that nothing dropped sticks
+		// out of it. Measured radially, which is conservative for a shape that
+		// is star shaped about its centroid, and a convex hull always is.
+		float requiredExpansion = 1.0f;
+
+		for (size_t vertexIndex = 0; vertexIndex < hullVertices.size(); vertexIndex++)
+		{
+			const math::Vector3 offset = hullVertices[vertexIndex] - centroid;
+			const float distance = vertexDistances[vertexIndex];
+
+			if (distance <= 1e-12f)
+			{
+				continue;
+			}
+
+			// The nearest kept direction, and how far out it reaches.
+			float bestAlignment = -2.0f;
+			float bestKeptDistance = 0.0f;
+
+			for (size_t keptIndex = 0; keptIndex < keptVertices.size(); keptIndex++)
+			{
+				const math::Vector3 keptOffset = keptVertices[keptIndex] - centroid;
+				const float keptDistance = keptDistances[keptIndex];
+
+				if (keptDistance <= 1e-12f)
+				{
+					continue;
+				}
+
+				const float alignment =
+					(offset.x * keptOffset.x + offset.y * keptOffset.y + offset.z * keptOffset.z) / (distance * keptDistance);
+
+				if (alignment > bestAlignment)
+				{
+					bestAlignment = alignment;
+					bestKeptDistance = keptDistance;
+				}
+			}
+
+			if (bestKeptDistance > 1e-12f)
+			{
+				requiredExpansion = std::max(requiredExpansion, distance / bestKeptDistance);
+			}
+		}
+
+		for (math::Vector3& keptVertex : keptVertices)
+		{
+			keptVertex.x = centroid.x + (keptVertex.x - centroid.x) * requiredExpansion;
+			keptVertex.y = centroid.y + (keptVertex.y - centroid.y) * requiredExpansion;
+			keptVertex.z = centroid.z + (keptVertex.z - centroid.z) * requiredExpansion;
+		}
+
+		hullVertices.swap(keptVertices);
+	}
+
 	std::unordered_map<const dooms::graphics::Mesh*, dooms::graphics::OccludeeHull> gOccludeeHulls;
 	dooms::graphics::OccludeeHull gEmptyHull;
 	unsigned int gTotalHullVertexCount = 0;
@@ -361,6 +504,11 @@ const dooms::graphics::OccludeeHull& dooms::graphics::GetOccludeeHull(const Mesh
 		}
 
 		BuildConvexHullVertices(points, hull.mVertices);
+
+		// An exact hull of a rock is about 740 vertices, which costs as much to
+		// project every frame as drawing the rock does. The budget is what makes
+		// the technique affordable at all.
+		DecimateHullConservatively(hull.mVertices, graphicsSetting::HiZHullVertexBudget);
 	}
 
 	gTotalHullVertexCount += static_cast<unsigned int>(hull.mVertices.size());
