@@ -1,3 +1,5 @@
+#include <chrono>
+#include <cstdio>
 #include "GameCore.h"
 
 #include <Rendering/Graphics_Server.h>
@@ -98,37 +100,114 @@ dooms::GameCore::~GameCore()
 
 }
 
+namespace
+{
+	// Startup timing, printed rather than profiled.
+	//
+	// D_START_PROFILING compiles out unless PROFILING_RELEASE_MODE is defined,
+	// which it is not, so the engine has never reported how its own start up
+	// time is spent. Three minutes of it is paid on every run.
+	std::chrono::steady_clock::time_point gStartupPhaseStart;
+
+	void BeginStartupPhase()
+	{
+		gStartupPhaseStart = std::chrono::steady_clock::now();
+	}
+
+	// Written to a file as well as the log.
+	//
+	// The in engine log is not usable for this: the garbage collector prints a
+	// line per object it collects, so anything logged during start up is buried
+	// thousands of lines deep before the window is even interactive.
+	void WriteStartupLine(const char* const text)
+	{
+		FILE* file = nullptr;
+		if (fopen_s(&file, "startup_timing.txt", "a") == 0 && file != nullptr)
+		{
+			fprintf(file, "%s\n", text);
+			fclose(file);
+		}
+	}
+
+	void EndStartupPhase(const char* const phaseName)
+	{
+		const double elapsedMilliseconds =
+			std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+				std::chrono::steady_clock::now() - gStartupPhaseStart).count();
+
+		char line[256];
+		snprintf(line, sizeof(line), "STARTUP : %-24s %8.0f ms", phaseName, elapsedMilliseconds);
+
+		WriteStartupLine(line);
+		D_RELEASE_LOG(eLogType::D_LOG, "%s", line);
+	}
+}
+
 void dooms::GameCore::Init()
 {
-	D_START_PROFILING(InitGameSetting, eProfileLayers::CPU);
+	std::remove("startup_timing.txt");
+
+	const std::chrono::steady_clock::time_point wholeStartupStart = std::chrono::steady_clock::now();
+
+	BeginStartupPhase();
 	InitGameSetting();
-	D_END_PROFILING(InitGameSetting);
-	
+	EndStartupPhase("InitGameSetting");
+
+	// Not timed as a whole: the phases inside it share the one timestamp, so an
+	// enclosing measurement would report the last of them rather than the sum.
 	InitServers();
+
+	BeginStartupPhase();
 	LateInit();
+	EndStartupPhase("LateInit");
 
+	BeginStartupPhase();
 	GameLogicStartPoint::StartGameLogic();
+	EndStartupPhase("StartGameLogic");
 
+	BeginStartupPhase();
 	PostSceneInitServers();
+	EndStartupPhase("PostSceneInitServers");
 
+	BeginStartupPhase();
 	gc::GarbageCollectorManager::Collect(true);
+	EndStartupPhase("GarbageCollect");
+
 	dooms::gc::GarbageCollectorManager::ResetElapsedTime();
+
+	char totalLine[256];
+	snprintf(totalLine, sizeof(totalLine), "STARTUP : %-24s %8.1f s", "TOTAL",
+		std::chrono::duration_cast<std::chrono::duration<double>>(
+			std::chrono::steady_clock::now() - wholeStartupStart).count());
+
+	WriteStartupLine(totalLine);
+	D_RELEASE_LOG(eLogType::D_LOG, "%s", totalLine);
 }
 
 void dooms::GameCore::InitServers()
 {
 	mMemoryManager.Init();
+
+	BeginStartupPhase();
 	mReflectionManager.Initialize();
+	EndStartupPhase("  ReflectionManager");
 	InitializeGraphicsAPI();
 	mEngineGUIServer.Init();
 	ThreadManager.Init();
 	thread::RunnableThread* const GameThread = ThreadManager.CreateNewRunnableThread(thread::EThreadType::GAME_THREAD);
 	//ThreadManager.CreateNewRunnableThread(thread::EThreadType::RENDER_THREAD);
 	ThreadManager.CreateNewRunnableThread(thread::EThreadType::JOB_THREAD, mGameConfigData.GetConfigData().GetValue<INT64>("SYSTEM", "MAX_SUB_THREAD_COUNT"));
+	BeginStartupPhase();
 	mAssetManager.Init();
+	EndStartupPhase("  AssetManager");
+
 	mTime_Server.Init();
 	mPhysics_Server.Init();
+
+	BeginStartupPhase();
 	mGraphics_Server.Init();
+	EndStartupPhase("  Graphics_Server");
+
 	mUserImput_Server.Init();
 	mSceneManager.Init();
 	dooms::gc::GarbageCollectorManager::Init();

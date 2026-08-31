@@ -1,4 +1,4 @@
-﻿#======================================================================
+#======================================================================
  
 # Graphics
 [Graphics]
@@ -52,7 +52,7 @@ CL_MERGE_RELATIVE_PATH = clmerge.dll
 CL_EXPORT_RELATIVE_PATH = clexport.dll
 SOURCE_DEPENDENCIES_FOLDER_NAME = SourceDependencies
 ENABLED_REFLECTION = TRUE
-GENERATE_REFLECTION_DATA = FALSE
+GENERATE_REFLECTION_DATA = TRUE
 REFLECTION_BINARY_FILE_NAME = reflection_binary
 GC_MULTITHREAD_ENABLED = TRUE
 GC_TIME_STEP = 90.0

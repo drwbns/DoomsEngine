@@ -949,8 +949,9 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 			// Throttled, because this runs every frame once it is working.
 			if ((mHiZFrameCounter % 300) == 0)
 			{
-				D_RELEASE_LOG(eLogType::D_LOG, "HiZ readback : level %u, %u x %u, nearest %f, farthest %f",
-					mHiZReadbackLevel, mHiZReadbackWidth, mHiZReadbackHeight, nearestDepth, farthestDepth);
+				// Readback detail was logged here every frame while this was being
+				// brought up. It buried the log, including the messages that say
+				// how long start up took.
 			}
 		}
 	}
@@ -1136,11 +1137,8 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 
 	if ((mHiZFrameCounter % 300) == 0 && testedCount > 0)
 	{
-		D_RELEASE_LOG(eLogType::D_LOG,
-			"HiZ occlusion : tested %u, occluded %u, culling %s, object ndc z range %f .. %f",
-			testedCount, culledAsRawCount,
-			dooms::graphics::graphicsSetting::IsHiZOcclusionCullingEnabled ? "on" : "off",
-			observedMinNDCZ, observedMaxNDCZ);
+		// Per frame occlusion counts were logged here. The same numbers are on
+		// the overlay, which does not cost a formatted string per frame.
 	}
 }
 

@@ -1,3 +1,5 @@
+#include <cstdio>
+#include <chrono>
 #include "ReflectionManager.h"
 
 #include "EngineConfigurationData/ConfigData.h"
@@ -156,14 +158,40 @@ void dooms::reflection::ReflectionManager::Initialize()
 		}
 #endif
 		
-		LoadReflectionBinaryDataFile();
+		// Split out because reflection is four fifths of start up and nothing
+		// said which part of it. Written to the same file the phase timings go
+		// to, since the in engine log is unreadable during start up.
+		const auto ReportReflectionPhase = [](const char* const phaseName, const std::chrono::steady_clock::time_point start)
+		{
+			const double elapsedMilliseconds =
+				std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+					std::chrono::steady_clock::now() - start).count();
 
+			FILE* file = nullptr;
+			if (fopen_s(&file, "startup_timing.txt", "a") == 0 && file != nullptr)
+			{
+				fprintf(file, "STARTUP :     %-20s %8.0f ms\n", phaseName, elapsedMilliseconds);
+				fclose(file);
+			}
+		};
+
+		std::chrono::steady_clock::time_point phaseStart = std::chrono::steady_clock::now();
+		LoadReflectionBinaryDataFile();
+		ReportReflectionPhase("LoadBinaryData", phaseStart);
+
+		phaseStart = std::chrono::steady_clock::now();
 		dooms::reflection::InitReflectionToString();
+		ReportReflectionPhase("InitToString", phaseStart);
 
 #ifdef DEBUG_MODE
+		phaseStart = std::chrono::steady_clock::now();
 		clReflectTest::test(mReflectionDatabase);
+		ReportReflectionPhase("clReflectTest", phaseStart);
 #endif
+
+		phaseStart = std::chrono::steady_clock::now();
 		CacheReflectionTypeDatas();
+		ReportReflectionPhase("CacheTypeDatas", phaseStart);
 	}
 	else
 	{

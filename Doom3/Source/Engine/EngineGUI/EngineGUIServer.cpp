@@ -1143,6 +1143,23 @@ void dooms::ui::EngineGUIServer::Update()
             dooms::graphics::graphicsSetting::IsMeshLodEnabled ? "By screen size" : "Full");
     }
 
+    // Y steps how many triangles a pixel is considered worth, which is what
+    // decides how coarse a level each object gets.
+    //
+    // Driving it to the floor forces every object to its coarsest level, and
+    // that is the test that matters: if the geometry pass does not get faster
+    // when the triangle count collapses, then triangle count is not what it is
+    // spending its time on, and the whole cost model is wrong.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_Y))
+    {
+        FLOAT32& trianglesPerPixel = dooms::graphics::graphicsSetting::MeshLodTrianglesPerPixel;
+
+        trianglesPerPixel = (trianglesPerPixel <= 0.02f) ? 1.0f : (trianglesPerPixel * 0.25f);
+
+        ShowNotification("Detail: %.3f triangles per pixel", trianglesPerPixel);
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {
