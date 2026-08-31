@@ -407,6 +407,42 @@ price.** The gap between a cheap conservative test and zero is the technique,
 not a defect in it. Taking the grid from 256 to 512 moved waste from 33% to
 25.6%, which is that mechanism being measured directly.
 
+### What level of detail is worth, before building any of it
+
+The geometry pass submits about eight triangles for every pixel on screen, and
+its cost is linear in triangles at `5.2 ms + 1.37 ms per million`. So the
+question "how much would Nanite style detail selection buy" has an arithmetic
+answer, and it can be had without writing a mesh simplifier.
+
+For every drawn object, take the smaller of the triangles it has and the pixels
+it covers, at one triangle per pixel, which is the point past which extra
+geometry cannot be seen. Summed over the frame that is the ceiling:
+
+    triangles 8.12 M, ideal 4.58 M, geometry 15.65 ms
+
+The model predicts 16.3 ms for 8.12 M against 15.65 ms measured, so it holds.
+At 4.58 M it predicts 11.5 ms, which makes level of detail worth **at least
+4.8 ms** on this frame.
+
+At least, because the ideal above is an over estimate. Coverage is taken from
+each object's screen aligned bounding rectangle, which is larger than the rock
+inside it, double counts where objects overlap, and credits fully occluded
+objects with the pixels they would have covered. Every one of those pushes the
+ideal up, so the true figure is lower and the saving larger.
+
+That is the largest single item measured in this document, it costs almost
+nothing per object -- projected screen size is already computed by PreCulling
+-- and it compounds with culling rather than competing with it, since the
+objects culling fails to remove get cheaper too.
+
+**What of Nanite is reachable.** Not the compute rasteriser for sub pixel
+triangles, not gpu driven cluster culling, not the visibility buffer: the
+backend has no compute dispatch, no unordered access views and no indirect
+draw. What is reachable is the part that matters here, which is selecting
+detail by projected screen error rather than by authored distance bands, and
+this scene has only 15 distinct meshes to build detail levels for. What is
+given up without the cluster hierarchy is seamlessness: discrete levels pop.
+
 ## Next
 
 1. **Tests around the culling math**, per phase 5 below. The V flip was caught by

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <utility>
 #include <Rendering/Renderer/MeshRenderer.h>
+#include <Rendering/Buffer/Mesh.h>
 
 #include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
 
@@ -342,10 +343,48 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 			drawStateKeys.clear();
 			drawStateKeys.reserve(visibleRenderers.size());
 
+			unsigned long long idealIndexCount = 0;
+
 			for (const Renderer* const renderer : visibleRenderers)
 			{
 				drawStateKeys.push_back(GetDrawStateKey(renderer));
+
+				// One triangle per pixel covered is the point past which extra
+				// geometry cannot be seen. Hardware rasterises in 2x2 quads, so
+				// triangles smaller than a pixel are largely wasted shading, and
+				// this scene submits about eight triangles for every pixel.
+				const dooms::MeshRenderer* const meshRenderer = dooms::CastTo<const dooms::MeshRenderer*>(renderer);
+				if (IsValid(meshRenderer) == false || IsValid(meshRenderer->GetMesh()) == false)
+				{
+					continue;
+				}
+
+				const unsigned long long actualIndexCount = meshRenderer->GetMesh()->GetNumOfIndices();
+
+				const culling::EntityBlockViewer& viewer = renderer->mCullingEntityBlockViewer;
+				if (viewer.IsValid() == false)
+				{
+					idealIndexCount += actualIndexCount;
+					continue;
+				}
+
+				const culling::EntityBlock* const entityBlock = viewer.GetTargetEntityBlock();
+				const UINT32 entityIndex = viewer.GetEntityIndexInBlock();
+
+				const FLOAT32 screenWidth =
+					entityBlock->mAABBMaxScreenSpacePointX[entityIndex] - entityBlock->mAABBMinScreenSpacePointX[entityIndex];
+				const FLOAT32 screenHeight =
+					entityBlock->mAABBMaxScreenSpacePointY[entityIndex] - entityBlock->mAABBMinScreenSpacePointY[entityIndex];
+
+				const FLOAT32 coveredPixels = math::Max(0.0f, screenWidth) * math::Max(0.0f, screenHeight);
+
+				// Three indices to a triangle, and never more than the mesh has.
+				const unsigned long long affordableIndexCount = static_cast<unsigned long long>(coveredPixels) * 3ull;
+
+				idealIndexCount += (affordableIndexCount < actualIndexCount) ? affordableIndexCount : actualIndexCount;
 			}
+
+			graphicsSetting::CullStatIdealIndexCount = idealIndexCount;
 
 			std::sort(drawStateKeys.begin(), drawStateKeys.end());
 

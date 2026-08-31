@@ -205,6 +205,15 @@ namespace dooms
 			extern inline unsigned int HiZHullMinCellCount{ 8 };
 			extern inline unsigned int CullStatHullTestedCount{ 0 };
 			extern inline unsigned int CullStatHullSkippedCount{ 0 };
+
+			// What a perfect level of detail scheme would have submitted.
+			//
+			// For every object drawn, the smaller of the triangles it actually
+			// has and the pixels it actually covers. Nothing is built to achieve
+			// this: it is the ceiling, measured before any mesh simplifier is
+			// written, because the geometry pass is linear in triangles and this
+			// says how far down that line a perfect scheme could reach.
+			extern inline unsigned long long CullStatIdealIndexCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 
