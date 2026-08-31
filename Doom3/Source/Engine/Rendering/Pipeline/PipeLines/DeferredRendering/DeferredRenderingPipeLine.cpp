@@ -102,6 +102,143 @@ void dooms::graphics::DeferredRenderingPipeLine::DrawHiZQuad()
 	}
 }
 
+namespace
+{
+	// The 2D convex hull of the projected hull vertices, by monotone chain.
+	//
+	// For a convex body this is exactly the outline of its projection, which is
+	// why the shape being projected has to be a hull in the first place: the
+	// outline of a projected non convex mesh is not the hull of its projected
+	// vertices, and testing against it would cull visible objects.
+	void BuildConvexOutline(
+		std::vector<std::pair<FLOAT32, FLOAT32>> points,
+		std::vector<std::pair<FLOAT32, FLOAT32>>& outOutline)
+	{
+		outOutline.clear();
+
+		if (points.size() < 3)
+		{
+			return;
+		}
+
+		std::sort(points.begin(), points.end());
+
+		const auto Cross = [](const std::pair<FLOAT32, FLOAT32>& o,
+			const std::pair<FLOAT32, FLOAT32>& a,
+			const std::pair<FLOAT32, FLOAT32>& b)
+		{
+			return (a.first - o.first) * (b.second - o.second) - (a.second - o.second) * (b.first - o.first);
+		};
+
+		outOutline.resize(points.size() * 2);
+
+		size_t outlineSize = 0;
+
+		for (size_t pointIndex = 0; pointIndex < points.size(); pointIndex++)
+		{
+			while (outlineSize >= 2 &&
+				Cross(outOutline[outlineSize - 2], outOutline[outlineSize - 1], points[pointIndex]) <= 0.0f)
+			{
+				outlineSize--;
+			}
+
+			outOutline[outlineSize++] = points[pointIndex];
+		}
+
+		const size_t lowerSize = outlineSize + 1;
+
+		for (size_t pointIndex = points.size() - 1; pointIndex > 0; pointIndex--)
+		{
+			while (outlineSize >= lowerSize &&
+				Cross(outOutline[outlineSize - 2], outOutline[outlineSize - 1], points[pointIndex - 1]) <= 0.0f)
+			{
+				outlineSize--;
+			}
+
+			outOutline[outlineSize++] = points[pointIndex - 1];
+		}
+
+		outOutline.resize((outlineSize > 0) ? (outlineSize - 1) : 0);
+	}
+
+	// The horizontal extent of the outline anywhere within one row of cells.
+	//
+	// Taken over the whole band rather than at a single scanline, because a cell
+	// is covered if the object touches any part of it. Returns false when the
+	// outline does not reach the row at all.
+	bool GetOutlineSpanForRow(
+		const std::vector<std::pair<FLOAT32, FLOAT32>>& outline,
+		const FLOAT32 rowTop,
+		const FLOAT32 rowBottom,
+		FLOAT32& outMinX,
+		FLOAT32& outMaxX)
+	{
+		bool bHasSpan = false;
+
+		outMinX = 0.0f;
+		outMaxX = 0.0f;
+
+		const auto Accumulate = [&](const FLOAT32 x)
+		{
+			if (bHasSpan == false)
+			{
+				outMinX = x;
+				outMaxX = x;
+				bHasSpan = true;
+			}
+			else
+			{
+				outMinX = math::Min(outMinX, x);
+				outMaxX = math::Max(outMaxX, x);
+			}
+		};
+
+		for (size_t edgeIndex = 0; edgeIndex < outline.size(); edgeIndex++)
+		{
+			const std::pair<FLOAT32, FLOAT32>& start = outline[edgeIndex];
+			const std::pair<FLOAT32, FLOAT32>& end = outline[(edgeIndex + 1) % outline.size()];
+
+			// A vertex sitting inside the band contributes its own x.
+			if (start.second >= rowTop && start.second <= rowBottom)
+			{
+				Accumulate(start.first);
+			}
+
+			const FLOAT32 edgeMinY = math::Min(start.second, end.second);
+			const FLOAT32 edgeMaxY = math::Max(start.second, end.second);
+
+			if (edgeMaxY < rowTop || edgeMinY > rowBottom)
+			{
+				continue;
+			}
+
+			const FLOAT32 deltaY = end.second - start.second;
+
+			if (std::fabs(deltaY) < 1e-6f)
+			{
+				// Horizontal edge lying in the band: both ends count.
+				Accumulate(start.first);
+				Accumulate(end.first);
+				continue;
+			}
+
+			// Where the edge crosses the top and bottom of the band, clamped to
+			// the edge itself so an edge ending inside the band is not run past.
+			for (const FLOAT32 bandY : { rowTop, rowBottom })
+			{
+				const FLOAT32 t = (bandY - start.second) / deltaY;
+
+				if (t >= 0.0f && t <= 1.0f)
+				{
+					Accumulate(start.first + (end.first - start.first) * t);
+				}
+			}
+		}
+
+		return bHasSpan;
+	}
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(dooms::Camera* const targetCamera, const size_t cameraIndex)
 {
 	if (graphicsSetting::IsHiZHullOccludeeEnabled == false ||
@@ -112,6 +249,31 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 	}
 
 	const std::chrono::steady_clock::time_point testStartTime = std::chrono::steady_clock::now();
+
+	for (unsigned int& bucketCount : graphicsSetting::CullStatHullCullsBySize)
+	{
+		bucketCount = 0;
+	}
+
+	graphicsSetting::CullStatHullTestedCount = 0;
+	graphicsSetting::CullStatHullSkippedCount = 0;
+
+	// The same normalisation the box path uses, since the screen bounds are in
+	// the culling system's resolution rather than the pyramid's.
+	culling::EveryCulling* const cullingSystemForBounds = mRenderingCullingManager.mCullingSystem.get();
+	if (cullingSystemForBounds == nullptr)
+	{
+		return;
+	}
+
+	const culling::SWDepthBuffer& hullDepthBuffer = cullingSystemForBounds->mMaskedSWOcclusionCulling->mDepthBuffer;
+	const FLOAT32 cullingWidth = static_cast<FLOAT32>(hullDepthBuffer.mResolution.mWidth);
+	const FLOAT32 cullingHeight = static_cast<FLOAT32>(hullDepthBuffer.mResolution.mHeight);
+
+	if (cullingWidth <= 0.0f || cullingHeight <= 0.0f)
+	{
+		return;
+	}
 
 	const math::Matrix4x4 viewProjectionMatrix = targetCamera->GetViewProjectionMatrix();
 
@@ -146,11 +308,33 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 			continue;
 		}
 
+		// Screen coverage from the bounds PreCulling already produced, so the
+		// decision not to project a hull costs nothing to make.
+		//
+		// A rock covering a couple of cells is quantised into the same cells
+		// whether it is boxed or outlined, and the staleness margin is wider
+		// than the difference. The measurement agrees: nothing under eight cells
+		// was ever culled by the hull that the box had not already kept.
+		const FLOAT32 screenCellWidth =
+			((entityBlock->mAABBMaxScreenSpacePointX[entityIndex] - entityBlock->mAABBMinScreenSpacePointX[entityIndex]) / cullingWidth)
+			* mHiZReadbackWidth;
+		const FLOAT32 screenCellHeight =
+			((entityBlock->mAABBMaxScreenSpacePointY[entityIndex] - entityBlock->mAABBMinScreenSpacePointY[entityIndex]) / cullingHeight)
+			* mHiZReadbackHeight;
+
+		if ((screenCellWidth * screenCellHeight) < static_cast<FLOAT32>(graphicsSetting::HiZHullMinCellCount))
+		{
+			graphicsSetting::CullStatHullSkippedCount++;
+			continue;
+		}
+
 		const OccludeeHull& hull = GetOccludeeHull(meshRenderer->GetMesh());
 		if (hull.mVertices.empty())
 		{
 			continue;
 		}
+
+		graphicsSetting::CullStatHullTestedCount++;
 
 		const math::Matrix4x4 modelViewProjection = viewProjectionMatrix * renderer->GetModelMatrix();
 
@@ -159,6 +343,12 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 		FLOAT32 minV = 1.0f;
 		FLOAT32 maxV = 0.0f;
 		FLOAT32 nearestNDCZ = 1.0f;
+
+		// Kept so the projected outline can be rasterised rather than boxed.
+		// Static because this runs for thousands of objects a frame and the size
+		// is bounded by the hull vertex budget.
+		static std::vector<std::pair<FLOAT32, FLOAT32>> projectedPoints;
+		projectedPoints.clear();
 
 		bool bIsTestable = true;
 
@@ -191,6 +381,8 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 			maxV = math::Max(maxV, v);
 
 			nearestNDCZ = math::Min(nearestNDCZ, ndcZ);
+
+			projectedPoints.emplace_back(u * mHiZReadbackWidth, v * mHiZReadbackHeight);
 		}
 
 		if (bIsTestable == false)
@@ -212,13 +404,54 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 			continue;
 		}
 
+		const INT32 coveredCellCount = (endX - startX + 1) * (endY - startY + 1);
+
+		// The outline itself, but only where the rectangle around it is loose
+		// enough to be worth the scanline. For an object covering a handful of
+		// cells the two differ by less than the margin already added.
+		const bool bShouldRasterisePolygon =
+			(graphicsSetting::IsHiZHullPolygonEnabled == true) &&
+			(coveredCellCount >= static_cast<INT32>(graphicsSetting::HiZHullPolygonMinCellCount)) &&
+			(projectedPoints.size() >= 3);
+
+		static std::vector<std::pair<FLOAT32, FLOAT32>> outline;
+
+		if (bShouldRasterisePolygon)
+		{
+			BuildConvexOutline(projectedPoints, outline);
+		}
+
 		bool bIsOccluded = true;
 
 		for (INT32 y = math::Max(0, startY); bIsOccluded && y <= endY && y < static_cast<INT32>(mHiZReadbackHeight); y++)
 		{
+			INT32 rowStartX = startX;
+			INT32 rowEndX = endX;
+
+			if (bShouldRasterisePolygon && outline.size() >= 3)
+			{
+				FLOAT32 rowMinX = 0.0f;
+				FLOAT32 rowMaxX = 0.0f;
+
+				// Nothing of the outline crosses this row, so there is nothing
+				// of the object here to be occluded by anything.
+				if (GetOutlineSpanForRow(outline, static_cast<FLOAT32>(y), static_cast<FLOAT32>(y + 1), rowMinX, rowMaxX) == false)
+				{
+					continue;
+				}
+
+				// Rounded outwards, and the staleness margin kept, so the
+				// narrower span can still only ever add cells to the test.
+				rowStartX = static_cast<INT32>(std::floor(rowMinX)) - 1;
+				rowEndX = static_cast<INT32>(std::ceil(rowMaxX)) + 1;
+
+				rowStartX = math::Max(rowStartX, startX);
+				rowEndX = math::Min(rowEndX, endX);
+			}
+
 			const FLOAT32* const row = mHiZReadbackData.data() + static_cast<size_t>(y) * mHiZReadbackWidth;
 
-			for (INT32 x = math::Max(0, startX); x <= endX && x < static_cast<INT32>(mHiZReadbackWidth); x++)
+			for (INT32 x = math::Max(0, rowStartX); x <= rowEndX && x < static_cast<INT32>(mHiZReadbackWidth); x++)
 			{
 				if (nearestNDCZ < row[x])
 				{
@@ -231,6 +464,16 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 		if (bIsOccluded)
 		{
 			entityBlock->SetCulled(entityIndex, cameraIndex);
+
+			// Bucketed by screen coverage, because that is what decides whether
+			// spending hull vertices on this object was worth it.
+			const size_t sizeBucket =
+				(coveredCellCount < 2) ? 0 :
+				(coveredCellCount < 8) ? 1 :
+				(coveredCellCount < 32) ? 2 :
+				(coveredCellCount < 128) ? 3 : 4;
+
+			graphicsSetting::CullStatHullCullsBySize[sizeBucket]++;
 		}
 	}
 

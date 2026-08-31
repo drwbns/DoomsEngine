@@ -61,6 +61,20 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			ImGui::Text("Hulls      : %u meshes, %u verts",
 				dooms::graphics::graphicsSetting::CullStatHullMeshCount,
 				dooms::graphics::graphicsSetting::CullStatHullVertexCount);
+
+			// Where the hull is winning, by how much of the screen the object
+			// covers. Culling a distant rock saves as many triangles as culling a
+			// near one, so this is what says whether a size threshold would keep
+			// the benefit or throw it away with the cost.
+			ImGui::Text("Hull tested: %u, skipped %u",
+				dooms::graphics::graphicsSetting::CullStatHullTestedCount,
+				dooms::graphics::graphicsSetting::CullStatHullSkippedCount);
+			ImGui::Text("Hull culls : %u/%u/%u/%u/%u by cells",
+				dooms::graphics::graphicsSetting::CullStatHullCullsBySize[0],
+				dooms::graphics::graphicsSetting::CullStatHullCullsBySize[1],
+				dooms::graphics::graphicsSetting::CullStatHullCullsBySize[2],
+				dooms::graphics::graphicsSetting::CullStatHullCullsBySize[3],
+				dooms::graphics::graphicsSetting::CullStatHullCullsBySize[4]);
 		}
 
 		// What a perfect culler would have managed, beside what this one did.

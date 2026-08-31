@@ -171,6 +171,40 @@ namespace dooms
 			// Vertices kept per hull. The exact hull of a rock is around 740,
 			// which is unaffordable to project per object per frame.
 			extern inline unsigned int HiZHullVertexBudget{ 24 };
+
+			// Rasterise the projected hull as a polygon instead of testing the
+			// rectangle around it.
+			//
+			// Off, because it was measured and it loses. It takes waste from 33%
+			// to 27% and the test from 5.7 ms to 30.5 ms, which is six points of
+			// waste for twenty five milliseconds. The scanline rescans every edge
+			// for every row it covers, so the cost lands on exactly the large
+			// objects the polygon was meant to help. Kept because the rewrite
+			// that would fix it -- walking edges incrementally down the rows
+			// rather than rescanning -- is worth trying against this number.
+			extern inline bool IsHiZHullPolygonEnabled{ false };
+			extern inline unsigned int HiZHullPolygonMinCellCount{ 16 };
+
+			// Where the hull wins, by how many cells the object covers.
+			//
+			// Culling a distant rock saves exactly as many triangles as culling a
+			// near one, so if the hull's extra culls turn out to be small distant
+			// objects, spending more hull vertices on near ones would discard the
+			// benefit along with the cost.
+			extern inline unsigned int CullStatHullCullsBySize[5]{ 0, 0, 0, 0, 0 };
+
+			// Below this many cells the hull is not tested at all.
+			//
+			// Every object the hull ever culled covered at least eight cells, and
+			// nothing under that was culled even once, so the gate costs nothing.
+			// It also saves little: at a 256 cell grid a cell is about four
+			// pixels, so only 480 of 3501 objects are under eight cells at all.
+			// The first reading of that bucket data was that small objects gain
+			// nothing from hulls, which is true, and that skipping them would be
+			// a large saving, which is not.
+			extern inline unsigned int HiZHullMinCellCount{ 8 };
+			extern inline unsigned int CullStatHullTestedCount{ 0 };
+			extern inline unsigned int CullStatHullSkippedCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

@@ -358,6 +358,55 @@ story. What is left is the shape of the test rather than its resolution:
 None of these are fixed by looking harder at the depth buffer. They are fixed
 by testing something tighter than a box.
 
+### Testing the silhouette instead of the box
+
+Three occludee shapes, measured on one frozen frame with the oracle scoring
+each. The oracle reports the same visible count under all of them, so none is
+cheating:
+
+| occludee | waste | Hi-Z test (cpu) | geometry | fps |
+| --- | --- | --- | --- | --- |
+| bounding box | 48.2% | 0.32 ms | 13.45 ms | 42 |
+| convex hull, rectangle around it | 33.0% | 5.73 ms | 12.68 ms | 34 |
+| convex hull, rasterised as a polygon | 27.1% | 30.52 ms | 9.08 ms | 18 |
+
+The hull is built once per mesh by incremental insertion, then decimated to a
+vertex budget by keeping the furthest vertex per direction bucket and pushing
+the kept set outward until it contains the dropped ones. That expansion is what
+keeps it correct: keeping a subset alone produces a shape inside the original,
+which would cull visible objects. The exact hull of a rock is about 740
+vertices, because a rock is a convex blob and nearly every vertex is on its own
+hull; 24 is the budget and 17 the average kept.
+
+**The box loses on quality and wins on time.** Every step towards a real
+silhouette culls more and costs more than it saves, in this build. The polygon
+is the worst of it: six points of waste for twenty five milliseconds, because
+the scanline rescans every edge for every row, so the cost falls on precisely
+the large objects the polygon exists to help. Walking edges incrementally down
+the rows is the obvious fix and has not been tried.
+
+**Where the hull wins, by screen coverage**, in cells, bucketed at 2, 8, 32 and
+128: `0 / 0 / 407 / 444 / 45`. Nothing under eight cells is ever culled by the
+hull that the box had not already kept, so a size gate is free. It is also
+nearly worthless: at a 256 cell grid a cell is four pixels, so only 480 of 3501
+objects are that small. The first reading of those buckets was that small
+objects gain nothing, which is true, and that skipping them would be a large
+saving, which is not.
+
+### Why no test reaches zero waste
+
+Because the test reads a max reduced pyramid, not the depth buffer. Each cell
+holds the farthest depth within it, which makes the test sufficient for
+occlusion and never necessary: an object is kept whenever one cell it covers
+holds a far value contributed by a pixel the object does not overlap.
+
+That survives any cell above one pixel, and a one pixel pyramid is the depth
+buffer, tested per object per pixel, which is exactly what the oracle does and
+exactly what a whole extra geometry pass costs. **Zero waste is the oracle's
+price.** The gap between a cheap conservative test and zero is the technique,
+not a defect in it. Taking the grid from 256 to 512 moved waste from 33% to
+25.6%, which is that mechanism being measured directly.
+
 ## Next
 
 1. **Tests around the culling math**, per phase 5 below. The V flip was caught by
