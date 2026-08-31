@@ -221,14 +221,48 @@ The useful number is not the verdict but the 3.05 ms. **That is the entire
 prize available to any overdraw reduction technique in this scene**, about 18%
 of the geometry pass. A perfect one that cost nothing could not beat it.
 
-Where the rest goes is visible in the same table. The depth only pass writes no
-colour and runs a trivial pixel shader, and it still costs 53% of the full
-pass. What it has in common with the full pass is 3758 draw calls. The geometry
-pass is bound by submitting them, not by filling pixels, so the technique worth
-researching here is not a better occlusion method but **instancing**: the scene
-is thousands of copies of a handful of rock meshes, each issued as its own
-draw. `BatchRenderingManager` already exists and already batches, but only for
-entities marked `Static`, and every rock here is `Dynamic` because it moves.
+Where the rest goes took three more experiments to establish, and the first
+answer was wrong. It looked like draw call submission, because the depth only
+pass shades nothing and still costs 53% of the full pass, and the thing it has
+in common with the full pass is 3758 draw calls. That inference does not
+survive measurement.
+
+**Binds are nearly free.** Same draw order, same frame, 3724 objects:
+
+| | mesh binds | geometry | fps |
+| --- | --- | --- | --- |
+| skip redundant binds | 1249 | 14.88 ms | 52 |
+| issue every bind | 3736 | 15.33 ms | 52 |
+
+2487 extra api calls cost 0.456 ms, about 0.18 us each. At that price all 3853
+draw submissions come to well under a millisecond of a fifteen millisecond
+pass, so submission is not the bottleneck and instancing would not fix one.
+
+**Grouping by state loses.** Drawing objects that share a mesh and material
+together collapses 1279 binds to 17, and makes the pass *slower*, 14.21 ms to
+16.11 ms, because giving up front to back order costs more in lost depth
+rejection than the binds were worth. Kept as a toggle rather than deleted: it
+is precisely the ordering instancing would require, so its price is part of
+instancing's price.
+
+**The triangle count is the answer.** The geometry pass submits **7.85 M
+triangles** for 3853 objects, against **0.92 M pixels** on screen. Two thousand
+triangles per rock, and an average triangle covering roughly an eighth of a
+pixel.
+
+That is the whole story. Hardware rasterises in 2x2 quads, so a triangle
+smaller than a pixel wastes most of the shading it triggers, and there are
+eight times more triangles here than there are pixels to put them in. It is
+also why the depth only pass costs 8.9 ms while shading nothing: it transforms
+and rasterises all 7.85 M of them a second time.
+
+So the technique this scene is asking for is **level of detail**, not
+instancing and not a better occlusion test. Distant rocks drawn at full density
+are the cost, and no amount of culling or batching addresses geometry that is
+drawn but far too dense for the size it appears at. Front to back ordering
+already recovers about 1.9 ms of overdraw, and the depth pre pass shows only
+3.05 ms was there to recover in total, which puts every remaining overdraw idea
+in perspective beside a fifteen millisecond pass.
 
 The Debug caveat is sharper for this result than for the others. Debug inflates
 per draw submission cost far more than it inflates shading, so the balance
@@ -245,13 +279,17 @@ per draw overhead is not, until it is re measured.
    current implementation covers with a one cell margin.
 3. **Move the Hi-Z test onto the GPU.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
-4. **Instancing for dynamic renderers**, which the measurement above points at
-   far more strongly than anything left in culling.
-5. **`PreRender`**, which costs 4.9 ms while the scene moves and 1.0 ms while it
+4. **Level of detail for the rock meshes.** 7.85 M triangles for 0.92 M pixels
+   is the largest measured cost in the frame by an order of magnitude, and
+   nothing else on this list competes with it.
+5. **Instancing**, now measured as worth under a millisecond and therefore not
+   the priority it looked like before the binds were priced.
+6. **`PreRender`**, now 0.16 ms on a still frame after skipping unmoved objects,
+   and still around 3 ms while everything moves and 1.0 ms while it
    is paused. The 3.9 ms difference is recomputing a world AABB per moving
    object; the 1.0 ms floor is copying bounds and a matrix into the entity block
    for all 5806 whether or not they moved.
-6. **Re-measure everything in Release.** Every number in this document is from a
+7. **Re-measure everything in Release.** Every number in this document is from a
    Debug build, which is fine for comparing two techniques that are both scalar
    and unfair to the one that is not.
 
