@@ -152,6 +152,16 @@ namespace dooms
 
 		void SetMaterial(graphics::Material* material) noexcept;
 		void SetMaterial(graphics::Material& material) noexcept;
+		/// <summary>
+		/// Dirty only when the transform moved, and cleared only here.
+		///
+		/// Deliberately not the collider's own dirty flag, which looks like it
+		/// would do: that one is cleared by whoever reads the world collider
+		/// first, so the bounds debug view alone would be enough to make this
+		/// skip an update it needed.
+		/// </summary>
+		DirtyReceiver bmIsCullingEntityDataDirty{ true };
+
 		FORCE_INLINE dooms::graphics::Material* GetMaterial()
 		{
 			return mTargetMaterial;

@@ -184,7 +184,24 @@ namespace dooms
 			*/
 
 
-			void Draw() const;
+			inline static unsigned int MESH_BIND_COUNT = 0;
+
+		void Draw() const;
+
+		/// <summary>
+		/// Forget which mesh is bound.
+		///
+		/// Call at the start of a draw loop. Anything outside this class that
+		/// touches the graphics state -- ImGui, a debugger, a capture tool --
+		/// leaves the cached answer wrong, and the cost of being wrong is
+		/// drawing one mesh's indices against another's vertices.
+		/// </summary>
+		static void ResetBoundMeshCache();
+
+		/// <summary>
+		/// Mesh binds issued since this was last called.
+		/// </summary>
+		static unsigned int GetAndResetMeshBindCount();
 			void DrawArray(const INT32 startVertexLocation, const UINT32 vertexCount) const;
 			void DrawArray(const GraphicsAPI::ePrimitiveType primitiveType, const INT32 startVertexLocation, const INT32 vertexCount) const;
 

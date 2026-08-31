@@ -1,6 +1,9 @@
 #include "DefaultGraphcisPipeLine.h"
 
 #include <chrono>
+#include <algorithm>
+#include <utility>
+#include <Rendering/Renderer/MeshRenderer.h>
 
 #include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
 
@@ -271,6 +274,16 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 
 		const bool IsExistCondtionFunc = static_cast<bool>(ConditionFunc);
 
+		// Nothing outside this loop can be trusted to have left the geometry
+		// binding where we last saw it.
+		Mesh::ResetBoundMeshCache();
+
+		// Gathered first rather than drawn as they are found, so the order can
+		// be chosen. Static because this runs every frame and the size barely
+		// changes; clearing keeps the capacity.
+		static std::vector<Renderer*> visibleRenderers;
+		visibleRenderers.clear();
+
 		const std::vector<Renderer*>& renderersInLayer = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
 		for (Renderer* renderer : renderersInLayer)
 		{
@@ -288,10 +301,60 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 					renderer->GetIsCulled(targetCamera->CameraIndexInCullingSystem) == false
 				)
 				{
-					renderer->Draw();
+					visibleRenderers.push_back(renderer);
 				}
 			}
 		}
+
+		// Which mesh with which material. Two objects sharing both can be drawn
+		// back to back without rebinding anything between them, and could one
+		// day be a single instanced draw. Two that do not, never can.
+		const auto GetDrawStateKey = [](const Renderer* const renderer)
+		{
+			const dooms::MeshRenderer* const meshRenderer = dooms::CastTo<const dooms::MeshRenderer*>(renderer);
+
+			return std::pair<const void*, const void*>(
+				IsValid(meshRenderer) ? static_cast<const void*>(meshRenderer->GetMesh()) : nullptr,
+				static_cast<const void*>(renderer->GetMaterial()));
+		};
+
+		if (graphicsSetting::IsGroupDrawsByStateEnabled == true)
+		{
+			// Stable, so objects keep their front to back order within a group
+			// and only the ordering between groups is given up.
+			std::stable_sort(visibleRenderers.begin(), visibleRenderers.end(),
+				[&GetDrawStateKey](const Renderer* const left, const Renderer* const right)
+				{
+					return GetDrawStateKey(left) < GetDrawStateKey(right);
+				});
+		}
+
+		for (Renderer* const renderer : visibleRenderers)
+		{
+			renderer->Draw();
+		}
+
+		// Only for the pass that shades, so a depth pre pass does not report
+		// over the top of the numbers for the pass it precedes.
+		if (dooms::graphics::FixedMaterial::GetSingleton()->GetFixedMaterial() == nullptr)
+		{
+			static std::vector<std::pair<const void*, const void*>> drawStateKeys;
+			drawStateKeys.clear();
+			drawStateKeys.reserve(visibleRenderers.size());
+
+			for (const Renderer* const renderer : visibleRenderers)
+			{
+				drawStateKeys.push_back(GetDrawStateKey(renderer));
+			}
+
+			std::sort(drawStateKeys.begin(), drawStateKeys.end());
+
+			graphicsSetting::CullStatDrawnRendererCount = static_cast<unsigned int>(drawStateKeys.size());
+			graphicsSetting::CullStatDrawGroupCount = static_cast<unsigned int>(
+				std::unique(drawStateKeys.begin(), drawStateKeys.end()) - drawStateKeys.begin());
+			graphicsSetting::CullStatMeshBindCount = Mesh::GetAndResetMeshBindCount();
+		}
+
 		D_END_PROFILING(DrawLoop);
 	}
 }

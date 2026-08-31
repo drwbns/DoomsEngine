@@ -84,6 +84,34 @@ namespace dooms
 			// the heatmap looks.
 			extern inline float GpuStatGeometryPassMilliseconds{ 0.0f };
 			extern inline float GpuStatDepthPrePassMilliseconds{ 0.0f };
+
+			// Skip rewriting an entity's culling data when its transform did not
+			// move. A toggle rather than an unconditional change, so the saving
+			// can be read off rather than asserted.
+			extern inline bool IsSkipUnchangedCullingDataEnabled{ true };
+
+			// How many draws the geometry pass would issue if every object
+			// sharing a mesh and a material were drawn together, beside how many
+			// it issues now. The ratio is the ceiling on what instancing could
+			// win, and is worth knowing before building it.
+			extern inline unsigned int CullStatDrawGroupCount{ 0 };
+			extern inline unsigned int CullStatDrawnRendererCount{ 0 };
+
+			// Draw in mesh and material order instead of front to back.
+			//
+			// A trade rather than an improvement, which is why it is off by
+			// default: it collapses redundant binds, and it gives up the depth
+			// rejection that front to back ordering buys. Measured, the two can
+			// be compared instead of argued about.
+			extern inline bool IsGroupDrawsByStateEnabled{ false };
+
+			// Skip rebinding a mesh that is already bound. Does almost nothing
+			// in front to back order and a great deal in grouped order.
+			extern inline bool IsSkipRedundantMeshBindEnabled{ true };
+
+			// How many mesh binds the geometry pass issued, against how many
+			// draws. Equal means every draw rebound its geometry.
+			extern inline unsigned int CullStatMeshBindCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

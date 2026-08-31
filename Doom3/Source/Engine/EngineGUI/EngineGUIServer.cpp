@@ -587,6 +587,22 @@ namespace
                 }
             }
 
+            if (ImGui::Checkbox("Group draws by state", &graphicsSetting::IsGroupDrawsByStateEnabled))
+            {
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            {
+                ImGui::SetTooltip("%s", "draws objects sharing a mesh and material together, giving up front to back order to stop rebinding the same geometry");
+            }
+
+            if (ImGui::Checkbox("Skip unmoved objects", &graphicsSetting::IsSkipUnchangedCullingDataEnabled))
+            {
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+            {
+                ImGui::SetTooltip("%s", "stops rewriting bounds and a matrix into the culling system for objects whose transform did not change");
+            }
+
             if (ImGui::Checkbox("Distance culling", &gIsDistanceCullingEnabled))
             {
                 // Re-applied through the mode, which is what actually reaches
@@ -984,10 +1000,14 @@ void dooms::ui::EngineGUIServer::Update()
     // B toggles the BVH, so the two frustum implementations can be swapped
     // while flying rather than by finding a checkbox.
     //
-    // Guarded on keyboard capture, unlike the function keys above: this is a
-    // letter, and the inspector has text fields that would otherwise toggle
-    // culling every time someone typed a b into one.
-    if (ImGui::GetIO().WantCaptureKeyboard == false
+    // Guarded on text input, unlike the function keys above: this is a letter,
+    // and the inspector has text fields that would otherwise toggle culling
+    // every time someone typed a b into one.
+    //
+    // WantTextInput rather than WantCaptureKeyboard, which is true whenever a
+    // docked panel merely has focus and so disabled every letter key for as
+    // long as the interface was on screen.
+    if (ImGui::GetIO().WantTextInput == false
         && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_B))
     {
         dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled = !dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled;
@@ -1004,7 +1024,7 @@ void dooms::ui::EngineGUIServer::Update()
 
     // P toggles the depth pre pass, the one lever in this engine that attacks
     // overdraw directly rather than by drawing fewer objects.
-    if (ImGui::GetIO().WantCaptureKeyboard == false
+    if (ImGui::GetIO().WantTextInput == false
         && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_P))
     {
         const bool bIsEnabled =
@@ -1015,6 +1035,43 @@ void dooms::ui::EngineGUIServer::Update()
             : dooms::graphics::eDepthPrePassType::AllOpaque;
 
         ShowNotification("Depth pre-pass: %s", bIsEnabled ? "Off" : "On");
+    }
+
+    // U toggles skipping the per frame culling data write for objects that
+    // did not move, so its saving can be read off PreRender rather than argued.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_U))
+    {
+        dooms::graphics::graphicsSetting::IsSkipUnchangedCullingDataEnabled =
+            !dooms::graphics::graphicsSetting::IsSkipUnchangedCullingDataEnabled;
+
+        ShowNotification("Skip unmoved: %s",
+            dooms::graphics::graphicsSetting::IsSkipUnchangedCullingDataEnabled ? "On" : "Off");
+    }
+
+    // G draws in mesh and material order instead of front to back, trading
+    // depth rejection for redundant binds.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_G))
+    {
+        dooms::graphics::graphicsSetting::IsGroupDrawsByStateEnabled =
+            !dooms::graphics::graphicsSetting::IsGroupDrawsByStateEnabled;
+
+        ShowNotification("Draw order: %s",
+            dooms::graphics::graphicsSetting::IsGroupDrawsByStateEnabled ? "Grouped by state" : "Front to back");
+    }
+
+    // M toggles skipping redundant mesh binds without touching the draw order,
+    // which is the only way to price the binds on their own: grouping changes
+    // the ordering at the same time, so its result confounds the two.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_M))
+    {
+        dooms::graphics::graphicsSetting::IsSkipRedundantMeshBindEnabled =
+            !dooms::graphics::graphicsSetting::IsSkipRedundantMeshBindEnabled;
+
+        ShowNotification("Redundant mesh binds: %s",
+            dooms::graphics::graphicsSetting::IsSkipRedundantMeshBindEnabled ? "Skipped" : "Issued");
     }
 
     // F4 puts the panels back into the default arrangement.

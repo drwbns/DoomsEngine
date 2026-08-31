@@ -46,6 +46,15 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			ImGui::Text("Hi-Z test  : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds);
 		}
 
+		// What instancing could collapse the geometry pass to, if it existed.
+		if (dooms::graphics::graphicsSetting::CullStatDrawGroupCount > 0)
+		{
+			ImGui::Text("Mesh binds : %u", dooms::graphics::graphicsSetting::CullStatMeshBindCount);
+			ImGui::Text("Draw groups: %u for %u objects",
+				dooms::graphics::graphicsSetting::CullStatDrawGroupCount,
+				dooms::graphics::graphicsSetting::CullStatDrawnRendererCount);
+		}
+
 		// The two passes that touch pixels. Shown together because a depth
 		// pre-pass is a trade between them, and either number alone hides it.
 		if (dooms::graphics::graphicsSetting::GpuStatGeometryPassMilliseconds > 0.0f)

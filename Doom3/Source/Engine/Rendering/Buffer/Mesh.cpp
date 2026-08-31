@@ -1,5 +1,7 @@
 #include "Mesh.h"
 
+#include <Graphics/graphicsSetting.h>
+
 
 #include "../Asset/ThreeDModelAsset.h"
 #include "eVertexArrayFlag.h"
@@ -208,6 +210,7 @@ void dooms::graphics::Mesh::CreateBufferObject
 			dynamicWrite
 		);
 		BindVertexBufferObject();
+		ResetBoundMeshCache();
 		
 #pragma warning( disable : 4312 )
 
@@ -369,6 +372,7 @@ void dooms::graphics::Mesh::UpdateVertexData
 	D_ASSERT_LOG()
 	
 	BindVertexBufferObject();
+	ResetBoundMeshCache();
 	GraphicsAPI::UpdateDataToBuffer(mVertexDataBuffer, GraphicsAPI::ARRAY_BUFFER, offsetInByte, dataSize, data);
 }
 */
@@ -546,27 +550,63 @@ void dooms::graphics::Mesh::CreateBufferObjectFromModelMesh(const ThreeDModelMes
 	}
 }
 
+// The mesh whose buffers are currently bound, or null when that is not known.
+//
+// Every bind in this file goes through Mesh, so the pointer is enough to say
+// whether the geometry is already in place: nothing else in the engine binds a
+// vertex buffer. It is cleared at the start of each draw loop, because ImGui
+// and the graphics debugger do change the binding behind us between loops.
+namespace
+{
+	const dooms::graphics::Mesh* BOUND_MESH = nullptr;
+}
+
+void dooms::graphics::Mesh::ResetBoundMeshCache()
+{
+	BOUND_MESH = nullptr;
+}
+
+unsigned int dooms::graphics::Mesh::GetAndResetMeshBindCount()
+{
+	const unsigned int meshBindCount = MESH_BIND_COUNT;
+	MESH_BIND_COUNT = 0;
+	return meshBindCount;
+}
+
 void dooms::graphics::Mesh::Draw() const
 {
 	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
 
-	if(graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::OpenGL)
+	const bool bIsAlreadyBound =
+		(BOUND_MESH == this) && (graphicsSetting::IsSkipRedundantMeshBindEnabled == true);
+
+	if (bIsAlreadyBound == false)
 	{
-		BindVertexArrayObject();
-	}
-	else if (graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::D3D11)
-	{
-		BindVertexBufferObject();
-	}
-	else
-	{
-		ASSUME_ZERO;
+		MESH_BIND_COUNT++;
+		BOUND_MESH = this;
+
+		if(graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::OpenGL)
+		{
+			BindVertexArrayObject();
+		}
+		else if (graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::D3D11)
+		{
+			BindVertexBufferObject();
+		}
+		else
+		{
+			ASSUME_ZERO;
+		}
 	}
 
 	if (IsElementBufferGenerated() == true)
 	{// TODO : WHY THIS MAKE ERROR ON RADEON GPU, CHECK THIS https://stackoverflow.com/questions/18299646/gldrawelements-emits-gl-invalid-operation-when-using-amd-driver-on-linux
 		// you don't need bind EBO everytime, EBO will be bound automatically when bind VAO
-		BindIndexBufferObject();
+		if (bIsAlreadyBound == false)
+		{
+			BindIndexBufferObject();
+		}
+
 		GraphicsAPI::DrawIndexed(mPrimitiveType, mNumOfIndices);
 	}
 	else
@@ -593,6 +633,10 @@ void dooms::graphics::Mesh::DrawArray(const INT32 startVertexLocation, const UIN
 	}
 
 	GraphicsAPI::Draw(mPrimitiveType, vertexCount, startVertexLocation);
+
+	// This bound a vertex buffer without binding an index buffer, so the state
+	// is not one a later Draw could reuse.
+	ResetBoundMeshCache();
 }
 
 void dooms::graphics::Mesh::DrawArray(const GraphicsAPI::ePrimitiveType primitiveType, const INT32 startVertexLocation,	const INT32 vertexCount) const
@@ -613,6 +657,8 @@ void dooms::graphics::Mesh::DrawArray(const GraphicsAPI::ePrimitiveType primitiv
 	}
 
 	GraphicsAPI::Draw(primitiveType, vertexCount, startVertexLocation);
+
+	ResetBoundMeshCache();
 }
 
 constexpr UINT32 dooms::graphics::Mesh::GetStride(const UINT32 vertexArrayFlag)

@@ -29,6 +29,7 @@ void dooms::Renderer::InitComponent()
 	AddLocalDirtyToTransformDirtyReceiver(BVH_AABB3D_Node_Object::IsWorldColliderCacheDirty);
 	//AddLocalDirtyToTransformDirtyReceiver(ColliderUpdater<dooms::physics::AABB3D>::IsWorldColliderCacheDirty);
 	AddLocalDirtyToTransformDirtyReceiver(bmIsModelMatrixDirty);
+	AddLocalDirtyToTransformDirtyReceiver(bmIsCullingEntityDataDirty);
 
 	InsertBVHLeafNode(graphics::Graphics_Server::GetSingleton()->mRendererColliderBVH, *BVH_AABB3D_Node_Object::GetWorldCollider(), nullptr);
 	UpdateRendererBatchRendering();
@@ -205,15 +206,23 @@ void dooms::Renderer::PreRender()
 
 		if(mCullingEntityBlockViewer.IsValid())
 		{
-			const physics::AABB3D* const aabb = ColliderUpdater<physics::AABB3D>::GetWorldCollider();
+			// A position, two bounds and a matrix per object per frame, for
+			// every renderer whether or not it moved. Cheap individually and
+			// 5806 of them a frame.
+			const bool bHasMoved = bmIsCullingEntityDataDirty.GetIsDirty(true);
 
-			mCullingEntityBlockViewer.UpdateEntityData
-			(
-				GetTransform()->GetPosition().data(),
-				aabb->mLowerBound.data(),
-				aabb->mUpperBound.data(),
-				GetTransform()->GetModelMatrix().data()
-			);
+			if (bHasMoved || (dooms::graphics::graphicsSetting::IsSkipUnchangedCullingDataEnabled == false))
+			{
+				const physics::AABB3D* const aabb = ColliderUpdater<physics::AABB3D>::GetWorldCollider();
+
+				mCullingEntityBlockViewer.UpdateEntityData
+				(
+					GetTransform()->GetPosition().data(),
+					aabb->mLowerBound.data(),
+					aabb->mUpperBound.data(),
+					GetTransform()->GetModelMatrix().data()
+				);
+			}
 		}
 	}
 
@@ -236,6 +245,11 @@ void dooms::Renderer::InitializeCullingEntityBlockViewer()
 {
 	mCullingEntityBlockViewer.SetDesiredMaxDrawDistance(mDesiredMaxDrawDistance);
 	mCullingEntityBlockViewer.SetIsObjectEnabled(true);
+
+	// A block allocated now holds nothing, and the transform may not move again
+	// for a while. Without this the entity would be culled against whatever the
+	// slot's previous owner left behind.
+	bmIsCullingEntityDataDirty = true;
 }
 
 void dooms::Renderer::UpdateCullingEntityBlockViewer()
