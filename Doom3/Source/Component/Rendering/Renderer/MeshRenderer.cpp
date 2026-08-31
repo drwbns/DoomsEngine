@@ -79,7 +79,7 @@ void dooms::MeshRenderer::Draw()
 	BindMaterial();
 
 	D_ASSERT(mTargetMaterial);
-	if (IsValid(mTargetMaterial))
+	if (IsValid(mTargetMaterial) && (graphics::graphicsSetting::IsSkipPerDrawUboWriteEnabled == false))
 	{
 		GetMaterial()->GetUniformBufferObjectViewFromUBOName("ModelData")->SetMat4x4(graphics::eUniformLocation::ModelMatrix, GetTransform()->GetModelMatrix());
 	}

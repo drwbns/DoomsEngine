@@ -1160,6 +1160,19 @@ void dooms::ui::EngineGUIServer::Update()
         ShowNotification("Detail: %.3f triangles per pixel", trianglesPerPixel);
     }
 
+    // V drops the per draw model matrix write, to price it. The scene
+    // collapses into a heap while it is on, which is the point: it is a
+    // measurement, not a mode.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_V))
+    {
+        dooms::graphics::graphicsSetting::IsSkipPerDrawUboWriteEnabled =
+            !dooms::graphics::graphicsSetting::IsSkipPerDrawUboWriteEnabled;
+
+        ShowNotification("Per-draw UBO write: %s",
+            dooms::graphics::graphicsSetting::IsSkipPerDrawUboWriteEnabled ? "SKIPPED (probe)" : "On");
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {

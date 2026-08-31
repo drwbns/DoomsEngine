@@ -225,6 +225,16 @@ namespace dooms
 			extern inline float MeshLodTrianglesPerPixel{ 1.0f };
 			extern inline unsigned int MeshLodMeshCount{ 0 };
 			extern inline unsigned int MeshLodLevelCount{ 0 };
+
+			// Probe: skip the per draw model matrix write.
+			//
+			// Not shippable -- every object draws with whatever matrix was left
+			// in the buffer, so the scene collapses into a heap. It exists to
+			// price one line. Every draw does a string keyed lookup for the
+			// "ModelData" buffer and then writes a 4x4 matrix into it, and at
+			// about 3 microseconds a draw across three and a half thousand
+			// objects, that line is a candidate for most of the frame.
+			extern inline bool IsSkipPerDrawUboWriteEnabled{ false };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 
