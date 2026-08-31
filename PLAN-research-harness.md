@@ -270,6 +270,54 @@ between the two columns would shift toward fill in Release. The 3.05 ms ceiling
 on overdraw work is measured, but how much of the remaining 13.6 ms is really
 per draw overhead is not, until it is re measured.
 
+### What perfect culling would be worth
+
+Pressing **O** re-draws every object the geometry pass drew, against the depth
+buffer it just produced, inside an occlusion query. An object returning no
+samples contributed nothing to the image. That count is the exact headroom any
+culling technique is competing for, and it replaces guessing at it from a
+heatmap.
+
+Three culling configurations on one frozen frame:
+
+| culling | drawn | wasted | truly visible | triangles | geometry |
+| --- | --- | --- | --- | --- | --- |
+| none | 5795 | 4345 (75%) | **1450** | 12.11 M | 21.76 ms |
+| frustum + sw occlusion | 3737 | 2287 (61%) | **1450** | 7.59 M | 15.27 ms |
+| frustum + Hi-Z | 3177 | 1727 (54%) | **1450** | 6.39 M | 13.93 ms |
+
+The truly visible count is identical to the object across all three, which is
+the oracle checking itself: what is visible depends on the scene and the
+camera, never on the technique used to look for it. Three wildly different
+drawn counts agreeing on 1450 is as strong a correctness signal as this harness
+has produced.
+
+Two things fall out of the table.
+
+**Geometry time is linear in triangles.** The three points fit
+`5.2 ms + 1.37 ms per million triangles` closely. That independently confirms
+the pass is bound by geometry rather than by pixels or by driver calls, from
+three measurements that were not taken to test it.
+
+**Hi-Z recovers 60% of the available waste and leaves 1727 objects on the
+table.** Extrapolating the fit to a perfect culler drawing only the 1450
+visible objects, roughly 3.0 M triangles, gives about **9.2 ms against the
+13.9 ms it costs now**. That is a prize of the same order as level of detail,
+and the two do not overlap: culling removes whole invisible objects, level of
+detail thins the visible ones.
+
+Why Hi-Z leaves so much: it tests a conservative bounding box against a coarse
+mip of last frame's depth. In a field of overlapping rocks a box can easily
+straddle a gap that the mesh inside it does not, and the test has to keep it.
+Closing that gap means testing at finer granularity than a whole box.
+
+The heatmap cannot answer any of this, and it is worth saying why, because it
+looks like it should. `OverDrawVisualization` draws with
+`SetIsDepthTestEnabled(false)` and additive blending, so the green and yellow
+are counting **geometric overlap**, not fragments the hardware actually shaded.
+Early Z rejects most of those before any shading happens. The heatmap shows
+where objects pile up; it does not show where time goes.
+
 ## Next
 
 1. **Tests around the culling math**, per phase 5 below. The V flip was caught by
