@@ -79,6 +79,7 @@ namespace dooms
 			// than any culling it could inform would save.
 			unsigned long long mHiZReadbackTexture{ 0 };
 			UINT32 mHiZReadbackLevel{ 0 };
+			UINT32 mHiZReadbackTargetWidthInUse{ 0 };
 			UINT32 mHiZReadbackWidth{ 0 };
 			UINT32 mHiZReadbackHeight{ 0 };
 			bool bmIsHiZReadbackPending{ false };

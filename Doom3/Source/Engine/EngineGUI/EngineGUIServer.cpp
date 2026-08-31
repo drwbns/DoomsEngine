@@ -1086,6 +1086,18 @@ void dooms::ui::EngineGUIServer::Update()
             dooms::graphics::graphicsSetting::IsVisibilityOracleEnabled ? "On" : "Off");
     }
 
+    // H steps the Hi-Z test through finer granularities, so the cost of its
+    // coarseness can be read off the oracle rather than assumed.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_H))
+    {
+        unsigned int& targetWidth = dooms::graphics::graphicsSetting::HiZReadbackTargetWidth;
+
+        targetWidth = (targetWidth >= 512u) ? 64u : (targetWidth * 2u);
+
+        ShowNotification("Hi-Z test grid: %u wide", targetWidth);
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {

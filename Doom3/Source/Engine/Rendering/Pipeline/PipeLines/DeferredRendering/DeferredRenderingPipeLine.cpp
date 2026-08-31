@@ -475,16 +475,27 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 		return;
 	}
 
+	// Rebuilt when the resolution is changed, so the effect of testing at a
+	// finer granularity can be measured rather than argued about.
+	if (mHiZReadbackTexture != 0 && mHiZReadbackTargetWidthInUse != graphicsSetting::HiZReadbackTargetWidth)
+	{
+		GraphicsAPI::DestroyTextureObject(mHiZReadbackTexture);
+		mHiZReadbackTexture = 0;
+		bmIsHiZReadbackDataValid = false;
+		bmIsHiZReadbackPending = false;
+	}
+
 	if (mHiZReadbackTexture == 0)
 	{
-		// A coarse level, so the copy is small and the map is cheap. Sixteen
-		// texels across is enough to see that real values are coming through
-		// while staying far away from the cost of reading back a whole screen.
-		// Aimed at roughly sixty texels across: fine enough that an object's
-		// screen rectangle covers a useful number of cells, coarse enough that
-		// the copy and the scan over it stay cheap.
+		// The coarsest level still at least this wide. The pyramid holds the
+		// farthest depth per cell, so a cell is only useful for culling when
+		// nothing in it is background: coarser cells are cheaper to scan and
+		// far more likely to contain a speck of sky that makes them useless.
+		mHiZReadbackTargetWidthInUse = graphicsSetting::HiZReadbackTargetWidth;
+
 		mHiZReadbackLevel = 0;
-		while ((mHiZReadbackLevel + 1 < mHiZLevelCount) && (mHiZTexture->GetTextureWidth(mHiZReadbackLevel) > 64))
+		while ((mHiZReadbackLevel + 1 < mHiZLevelCount) &&
+			(mHiZTexture->GetTextureWidth(mHiZReadbackLevel) > static_cast<INT32>(mHiZReadbackTargetWidthInUse)))
 		{
 			mHiZReadbackLevel++;
 		}

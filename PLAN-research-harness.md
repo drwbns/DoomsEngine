@@ -318,6 +318,46 @@ are counting **geometric overlap**, not fragments the hardware actually shaded.
 Early Z rejects most of those before any shading happens. The heatmap shows
 where objects pile up; it does not show where time goes.
 
+### Why Hi-Z leaves invisible objects on screen
+
+The pyramid stores the farthest depth in each cell, which is what makes the
+test conservative and safe. It also means a single pixel of visible background
+sets its whole cell to the far plane, and nothing behind that cell can ever be
+culled again. How much damage that does depends entirely on how big a cell is,
+and the cell size came from this, which was a guess:
+
+    while (level + 1 < levelCount && GetTextureWidth(level) > 64) level++;
+
+Sixty four cells across a 1280 wide screen makes each cell 21 by 22 pixels, so
+one speck of sky poisons a 21 pixel neighbourhood. Put on **H** and swept, with
+the oracle scoring each setting on one frozen frame:
+
+| grid | drawn | wasted | Hi-Z test | triangles | geometry | fps |
+| --- | --- | --- | --- | --- | --- | --- |
+| 64 | 3174 | 1903 (60%) | 0.213 ms | 6.45 M | 14.43 ms | 40 |
+| 128 | 2841 | 1570 (55%) | 0.264 ms | 5.77 M | 12.90 ms | 44 |
+| 256 | 2619 | 1348 (52%) | 0.402 ms | 5.34 M | 12.31 ms | 46 |
+| 512 | 2477 | 1206 (49%) | 0.808 ms | 5.04 M | 10.95 ms | 46 |
+
+The oracle reports 1271 visible objects at every setting, which is what makes
+the drawn column comparable at all. One constant was costing 697 objects and
+3.5 ms of geometry time. The default is now 256, the knee of the curve.
+
+**Half the waste survives the finest grid**, so cell size was never the whole
+story. What is left is the shape of the test rather than its resolution:
+
+- It tests the screen rectangle of an axis aligned box, which is substantially
+  larger than the rock inside it, so it overlaps real background that the rock
+  does not.
+- It compares against `mAABBMinNDCZ`, the box's nearest corner. For a roughly
+  spherical rock that corner sits about 0.7 radii in front of the surface, so
+  a rock tucked closely behind an occluder still pokes through it.
+- The one cell margin added for readback staleness inflates the rectangle
+  further, though far less at 256 than it did at 64.
+
+None of these are fixed by looking harder at the depth buffer. They are fixed
+by testing something tighter than a box.
+
 ## Next
 
 1. **Tests around the culling math**, per phase 5 below. The V flip was caught by

@@ -131,6 +131,20 @@ namespace dooms
 			extern inline bool IsVisibilityOracleEnabled{ false };
 			extern inline unsigned int CullStatOracleTestedCount{ 0 };
 			extern inline unsigned int CullStatOracleInvisibleCount{ 0 };
+
+			// How many cells across the Hi-Z test reads back.
+			//
+			// This decides how coarse the occlusion test is, and it was picked
+			// out of the air. It matters more than it looks: the pyramid holds
+			// the farthest depth in each cell, so a single background pixel sets
+			// its whole cell to the far plane and nothing behind that cell can
+			// ever be culled. At sixty cells across a 1280 wide screen, one
+			// speck of visible background poisons a 21 by 22 pixel block.
+			// 256 is the knee of the measured curve. Going 64 to 512 culls 697
+			// more objects and takes 3.5 ms off the geometry pass; most of that
+			// arrives by 256, and 512 costs twice the cpu for another tenth of a
+			// frame. The original 64 was a guess and cost about 3 ms.
+			extern inline unsigned int HiZReadbackTargetWidth{ 256 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 
