@@ -383,6 +383,7 @@ void dooms::graphics::Mesh::BindIndexBufferObject() const
 	D_ASSERT(mVertexDataBuffer.IsValid() == true);
 	if (BOUND_INDEX_BUFFER_ID != mElementBufferObjectID.GetBufferID())
 	{
+		INDEX_BIND_COUNT++;
 		BOUND_INDEX_BUFFER_ID = mElementBufferObjectID;
 		dooms::graphics::GraphicsAPI::BindBuffer(mElementBufferObjectID, 0, graphics::GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER, graphics::GraphicsAPI::eGraphicsPipeLineStage::DUMMY);
 	}
@@ -566,11 +567,42 @@ void dooms::graphics::Mesh::ResetBoundMeshCache()
 	BOUND_MESH = nullptr;
 }
 
+void dooms::graphics::Mesh::BindVertexBufferObjectIfNotBound() const
+{
+	if ((BOUND_MESH == this) && (graphicsSetting::IsSkipRedundantMeshBindEnabled == true))
+	{
+		return;
+	}
+
+	MESH_BIND_COUNT++;
+	BOUND_MESH = this;
+
+	if (graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::OpenGL)
+	{
+		BindVertexArrayObject();
+	}
+	else if (graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::D3D11)
+	{
+		BindVertexBufferObject();
+	}
+	else
+	{
+		ASSUME_ZERO;
+	}
+}
+
 unsigned int dooms::graphics::Mesh::GetAndResetMeshBindCount()
 {
 	const unsigned int meshBindCount = MESH_BIND_COUNT;
 	MESH_BIND_COUNT = 0;
 	return meshBindCount;
+}
+
+unsigned int dooms::graphics::Mesh::GetAndResetIndexBindCount()
+{
+	const unsigned int indexBindCount = INDEX_BIND_COUNT;
+	INDEX_BIND_COUNT = 0;
+	return indexBindCount;
 }
 
 unsigned long long dooms::graphics::Mesh::GetAndResetIndexCount()
@@ -580,39 +612,46 @@ unsigned long long dooms::graphics::Mesh::GetAndResetIndexCount()
 	return indexCount;
 }
 
+void dooms::graphics::Mesh::DrawWithIndexBuffer(const BufferID& indexBuffer, const unsigned long long indexCount) const
+{
+	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
+
+	if (indexBuffer.IsValid() == false || indexCount == 0)
+	{
+		Draw();
+		return;
+	}
+
+	// The vertices are this mesh's, so the vertex binding is this mesh's, and a
+	// following draw of the same mesh can still skip it. Only the index buffer
+	// differs, and it has a cache of its own.
+	BindVertexBufferObjectIfNotBound();
+
+	if (BOUND_INDEX_BUFFER_ID != indexBuffer.GetBufferID())
+	{
+		INDEX_BIND_COUNT++;
+		BOUND_INDEX_BUFFER_ID = indexBuffer;
+		GraphicsAPI::BindBuffer(indexBuffer, 0, GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER, GraphicsAPI::eGraphicsPipeLineStage::DUMMY);
+	}
+
+	INDEX_COUNT += indexCount;
+
+	GraphicsAPI::DrawIndexed(mPrimitiveType, indexCount);
+}
+
 void dooms::graphics::Mesh::Draw() const
 {
 	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
 
-	const bool bIsAlreadyBound =
-		(BOUND_MESH == this) && (graphicsSetting::IsSkipRedundantMeshBindEnabled == true);
-
-	if (bIsAlreadyBound == false)
-	{
-		MESH_BIND_COUNT++;
-		BOUND_MESH = this;
-
-		if(graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::OpenGL)
-		{
-			BindVertexArrayObject();
-		}
-		else if (graphics::GraphicsAPIManager::GetCurrentAPIType() == graphics::GraphicsAPI::eGraphicsAPIType::D3D11)
-		{
-			BindVertexBufferObject();
-		}
-		else
-		{
-			ASSUME_ZERO;
-		}
-	}
+	BindVertexBufferObjectIfNotBound();
 
 	if (IsElementBufferGenerated() == true)
 	{// TODO : WHY THIS MAKE ERROR ON RADEON GPU, CHECK THIS https://stackoverflow.com/questions/18299646/gldrawelements-emits-gl-invalid-operation-when-using-amd-driver-on-linux
 		// you don't need bind EBO everytime, EBO will be bound automatically when bind VAO
-		if (bIsAlreadyBound == false)
-		{
-			BindIndexBufferObject();
-		}
+		// Self checking, and checked every time: a detail level drawn in
+		// between will have left a different index buffer bound while this
+		// mesh's vertices were still the ones in place.
+		BindIndexBufferObject();
 
 		INDEX_COUNT += mNumOfIndices;
 		GraphicsAPI::DrawIndexed(mPrimitiveType, mNumOfIndices);

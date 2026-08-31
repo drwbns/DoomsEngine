@@ -2,6 +2,9 @@
 
 #include <vector>
 
+#include <Graphics/GraphicsAPI/GraphicsAPI.h>
+#include <Rendering/Buffer/BufferID.h>
+
 namespace dooms
 {
 	class ThreeDModelMesh;
@@ -11,8 +14,8 @@ namespace dooms
 		class Mesh;
 
 		/// <summary>
-		/// Simplified versions of a mesh, coarsest last, level zero being the
-		/// original.
+		/// One simplified version of a mesh, as an index buffer over the
+		/// vertices the mesh already uploaded.
 		///
 		/// The geometry pass in this engine submits about eight triangles for
 		/// every pixel on screen, and costs 5.2 ms plus 1.37 ms per million
@@ -21,14 +24,23 @@ namespace dooms
 		/// invisible: hardware rasterises in 2x2 quads, so a triangle smaller
 		/// than a pixel wastes most of the shading it triggers.
 		///
-		/// Levels share the original vertex buffer and differ only in their
-		/// index buffer. Vertex shading is driven by indices, so the vertices a
-		/// level does not reference cost nothing to keep.
+		/// Levels hold no vertices of their own. Vertex shading is driven by
+		/// indices, so the vertices a coarse level stops referencing stop being
+		/// paid for, and every level of a mesh shares one vertex buffer.
+		/// </summary>
+		struct MeshLodLevel
+		{
+			BufferID mIndexBuffer{};
+			unsigned long long mIndexCount{ 0 };
+		};
+
+		/// <summary>
+		/// The levels for one mesh, finest first. Empty when the mesh cannot be
+		/// simplified usefully, in which case it is always drawn in full.
 		/// </summary>
 		struct MeshLodChain
 		{
-			std::vector<Mesh*> mLevels;
-			std::vector<unsigned long long> mIndexCounts;
+			std::vector<MeshLodLevel> mLevels;
 			bool bmIsBuilt{ false };
 		};
 
@@ -40,13 +52,12 @@ namespace dooms
 		/// <summary>
 		/// The coarsest level that still has at least one triangle per pixel the
 		/// object covers, which is the point past which more geometry cannot be
-		/// seen. Returns the mesh itself when no level is coarse enough, or when
-		/// levels are switched off.
+		/// resolved. Returns null when the mesh should be drawn at full detail.
 		/// </summary>
-		const Mesh* SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount);
+		const MeshLodLevel* SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount);
 
 		/// <summary>
-		/// Levels built and the meshes they were built for, for the overlay.
+		/// Meshes with levels, and levels built, for the overlay.
 		/// </summary>
 		void GetMeshLodStatistics(unsigned int& outMeshCount, unsigned int& outLevelCount);
 	}

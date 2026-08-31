@@ -49,7 +49,9 @@ void dooms::ui::DrawCallCounterGUI::Render()
 		// What instancing could collapse the geometry pass to, if it existed.
 		if (dooms::graphics::graphicsSetting::CullStatDrawGroupCount > 0)
 		{
-			ImGui::Text("Mesh binds : %u", dooms::graphics::graphicsSetting::CullStatMeshBindCount);
+			ImGui::Text("Mesh binds : %u  (index %u)",
+				dooms::graphics::graphicsSetting::CullStatMeshBindCount,
+				dooms::graphics::graphicsSetting::CullStatIndexBindCount);
 			ImGui::Text("Triangles  : %.2f M  (ideal %.2f M)",
 				static_cast<double>(dooms::graphics::graphicsSetting::CullStatIndexCount) / 3000000.0,
 				static_cast<double>(dooms::graphics::graphicsSetting::CullStatIdealIndexCount) / 3000000.0);

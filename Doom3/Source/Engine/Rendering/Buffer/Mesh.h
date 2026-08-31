@@ -185,6 +185,7 @@ namespace dooms
 
 
 			inline static unsigned int MESH_BIND_COUNT = 0;
+		inline static unsigned int INDEX_BIND_COUNT = 0;
 		inline static unsigned long long INDEX_COUNT = 0;
 
 		void Draw() const;
@@ -199,10 +200,23 @@ namespace dooms
 		/// </summary>
 		static void ResetBoundMeshCache();
 
+		void BindVertexBufferObjectIfNotBound() const;
+
 		/// <summary>
 		/// Mesh binds issued since this was last called.
 		/// </summary>
 		static unsigned int GetAndResetMeshBindCount();
+		static unsigned int GetAndResetIndexBindCount();
+
+		/// <summary>
+		/// Draw this mesh's vertices through a different index buffer.
+		///
+		/// This is how detail levels are drawn. Vertex shading is driven by
+		/// indices, so a level that references fewer vertices costs less without
+		/// needing a vertex buffer of its own, and every level of a mesh shares
+		/// the one the mesh already uploaded.
+		/// </summary>
+		void DrawWithIndexBuffer(const BufferID& indexBuffer, const unsigned long long indexCount) const;
 
 		/// <summary>
 		/// Indices submitted since this was last called.

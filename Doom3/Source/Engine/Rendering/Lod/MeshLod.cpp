@@ -104,7 +104,6 @@ namespace
 	}
 
 	std::unordered_map<const dooms::graphics::Mesh*, dooms::graphics::MeshLodChain> gMeshLodChains;
-	std::vector<dooms::ThreeDModelMesh*> gLodModelMeshes;
 	dooms::graphics::MeshLodChain gEmptyChain;
 	unsigned int gTotalLevelCount = 0;
 }
@@ -122,101 +121,107 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 		return found->second;
 	}
 
-	MeshLodChain& chain = gMeshLodChains[mesh];
+	// Built into a local first. Inserting into the map before the levels exist
+	// would hand out a reference that a rehash could invalidate underneath the
+	// very loop that is filling it.
+	MeshLodChain chain;
 	chain.bmIsBuilt = true;
 
 	const dooms::ThreeDModelMesh* const modelMesh = mesh->GetTargetThreeDModelMesh();
 
-	if (modelMesh == nullptr || modelMesh->mMeshIndices.empty())
+	if (modelMesh != nullptr && modelMesh->mMeshIndices.empty() == false)
 	{
-		return chain;
+		// Roughly a quarter of the triangles at each step, which is about one
+		// level per halving of the object's size on screen.
+		const unsigned int gridResolutions[3] = { 24, 12, 6 };
+
+		unsigned long long previousIndexCount = mesh->GetNumOfIndices();
+
+		for (const unsigned int gridResolution : gridResolutions)
+		{
+			std::vector<UINT32> simplifiedIndices;
+			BuildClusteredIndices(*modelMesh, gridResolution, simplifiedIndices);
+
+			if (simplifiedIndices.size() < 3)
+			{
+				break;
+			}
+
+			// Not enough of a saving to be worth a buffer and a level.
+			if (simplifiedIndices.size() * 10 > previousIndexCount * 8)
+			{
+				continue;
+			}
+
+			// Nothing but a gpu buffer is created here. Constructing engine
+			// objects part way through a draw loop is what the first attempt at
+			// this did, and it took the process with it.
+			const BufferID indexBuffer = GraphicsAPI::CreateBufferObject(
+				GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER,
+				simplifiedIndices.size() * sizeof(UINT32),
+				nullptr,
+				false);
+
+			if (indexBuffer.IsValid() == false)
+			{
+				break;
+			}
+
+			GraphicsAPI::UpdateDataToBuffer(
+				indexBuffer,
+				GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER,
+				0,
+				simplifiedIndices.size() * sizeof(UINT32),
+				reinterpret_cast<const void*>(simplifiedIndices.data()));
+
+			MeshLodLevel level;
+			level.mIndexBuffer = indexBuffer;
+			level.mIndexCount = simplifiedIndices.size();
+
+			chain.mLevels.push_back(level);
+
+			previousIndexCount = level.mIndexCount;
+			gTotalLevelCount++;
+		}
 	}
 
-	// Level zero is the mesh itself, so selection can always fall back to it
-	// without a special case.
-	chain.mLevels.push_back(const_cast<Mesh*>(mesh));
-	chain.mIndexCounts.push_back(mesh->GetNumOfIndices());
-
-	// Roughly a quarter of the triangles at each step, which is a level about
-	// every halving of the object's size on screen.
-	const unsigned int gridResolutions[3] = { 24, 12, 6 };
-
-	for (const unsigned int gridResolution : gridResolutions)
-	{
-		std::vector<UINT32> simplifiedIndices;
-		BuildClusteredIndices(*modelMesh, gridResolution, simplifiedIndices);
-
-		if (simplifiedIndices.size() < 3)
-		{
-			break;
-		}
-
-		// Not worth a level of its own, and not worth the buffer.
-		if (simplifiedIndices.size() * 10 > chain.mIndexCounts.back() * 8)
-		{
-			continue;
-		}
-
-		// Copied so the level owns vertex data of its own for upload. The
-		// indices are the only part that differs, but the upload path takes a
-		// whole model mesh.
-		dooms::ThreeDModelMesh* const lodModelMesh = new dooms::ThreeDModelMesh(*modelMesh);
-		lodModelMesh->mMeshIndices = simplifiedIndices;
-		lodModelMesh->bHasIndices = true;
-
-		gLodModelMeshes.push_back(lodModelMesh);
-
-		Mesh* const lodMesh = dooms::CreateDObject<Mesh>();
-		if (IsValid(lodMesh) == false)
-		{
-			break;
-		}
-
-		*lodMesh = *lodModelMesh;
-
-		chain.mLevels.push_back(lodMesh);
-		chain.mIndexCounts.push_back(lodMesh->GetNumOfIndices());
-
-		gTotalLevelCount++;
-	}
-
-	return chain;
+	return gMeshLodChains.emplace(mesh, std::move(chain)).first->second;
 }
 
-const dooms::graphics::Mesh* dooms::graphics::SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount)
+const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount)
 {
 	if (graphicsSetting::IsMeshLodEnabled == false || mesh == nullptr)
 	{
-		return mesh;
+		return nullptr;
 	}
 
 	const MeshLodChain& chain = GetMeshLodChain(mesh);
 
-	if (chain.mLevels.size() < 2)
+	if (chain.mLevels.empty())
 	{
-		return mesh;
+		return nullptr;
 	}
 
 	// One triangle per pixel is the point past which more geometry cannot be
 	// resolved. The multiplier is there so the trade can be measured rather
 	// than assumed correct at exactly one.
-	const float affordableTriangleCount =
-		coveredPixelCount * graphicsSetting::MeshLodTrianglesPerPixel;
+	const float affordableTriangleCount = coveredPixelCount * graphicsSetting::MeshLodTrianglesPerPixel;
 
 	const unsigned long long affordableIndexCount =
 		static_cast<unsigned long long>((affordableTriangleCount > 0.0f) ? (affordableTriangleCount * 3.0f) : 0.0f);
 
 	// Coarsest first, so the answer is the cheapest level that still has enough
-	// triangles to be worth having.
-	for (size_t levelIndex = chain.mLevels.size(); levelIndex-- > 1; )
+	// triangles to be worth having. Falling off the end means even the finest
+	// simplified level is too coarse, and the mesh itself should be drawn.
+	for (size_t levelIndex = chain.mLevels.size(); levelIndex-- > 0; )
 	{
-		if (chain.mIndexCounts[levelIndex] >= affordableIndexCount)
+		if (chain.mLevels[levelIndex].mIndexCount >= affordableIndexCount)
 		{
-			return chain.mLevels[levelIndex];
+			return &chain.mLevels[levelIndex];
 		}
 	}
 
-	return chain.mLevels[0];
+	return nullptr;
 }
 
 void dooms::graphics::GetMeshLodStatistics(unsigned int& outMeshCount, unsigned int& outLevelCount)

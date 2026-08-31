@@ -112,6 +112,7 @@ namespace dooms
 			// How many mesh binds the geometry pass issued, against how many
 			// draws. Equal means every draw rebound its geometry.
 			extern inline unsigned int CullStatMeshBindCount{ 0 };
+			extern inline unsigned int CullStatIndexBindCount{ 0 };
 
 			// Indices submitted by the geometry pass.
 			//
