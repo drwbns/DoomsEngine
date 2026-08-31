@@ -145,6 +145,28 @@ namespace dooms
 			// arrives by 256, and 512 costs twice the cpu for another tenth of a
 			// frame. The original 64 was a guess and cost about 3 ms.
 			extern inline unsigned int HiZReadbackTargetWidth{ 256 };
+
+			// Two probes for attributing the waste the finest grid still leaves.
+			//
+			// Neither is conservative, so neither is shippable: they deliberately
+			// cull things that may be visible, and the oracle is what catches it.
+			// They exist to answer which half of the box test is costing the
+			// most, before any effort goes into replacing it. Shrinking the
+			// rectangle stands in for a tighter silhouette; pushing the depth
+			// back stands in for a bounding sphere's nearer surface instead of
+			// the box's protruding corner.
+			extern inline float HiZProbeRectangleShrink{ 0.0f };
+			extern inline float HiZProbeDepthPush{ 0.0f };
+
+			// Test the mesh's convex hull instead of its bounding box.
+			//
+			// The hull contains the mesh, so the test stays conservative, but it
+			// gives the true nearest depth rather than a box corner sticking out
+			// in front of the object, and a screen rectangle that follows the
+			// mesh rather than the box around it.
+			extern inline bool IsHiZHullOccludeeEnabled{ false };
+			extern inline unsigned int CullStatHullMeshCount{ 0 };
+			extern inline unsigned int CullStatHullVertexCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

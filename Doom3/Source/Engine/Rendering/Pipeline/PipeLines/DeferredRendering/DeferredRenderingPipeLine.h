@@ -190,6 +190,17 @@ namespace dooms
 			/// </summary>
 			void MeasureTrueVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex);
 
+			/// <summary>
+			/// The Hi-Z occludee test using each mesh's convex hull rather than
+			/// its bounding box.
+			///
+			/// Runs over renderers rather than entity blocks, because the hull
+			/// belongs to the mesh and only the renderer knows which mesh it is
+			/// drawing. Objects already culled are skipped, so this only pays for
+			/// what the cheaper tests could not decide.
+			/// </summary>
+			void ApplyHiZHullOcclusionCulling(dooms::Camera* const targetCamera, const size_t cameraIndex);
+
 			void BeginGpuTimer(GpuTimerRing& gpuTimerRing, FLOAT32& destinationMilliseconds);
 			void EndGpuTimer(GpuTimerRing& gpuTimerRing);
 

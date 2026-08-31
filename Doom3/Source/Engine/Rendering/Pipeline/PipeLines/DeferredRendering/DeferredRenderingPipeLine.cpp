@@ -1,5 +1,8 @@
 #include "DeferredRenderingPipeLine.h"
 
+#include <Rendering/Culling/OccludeeHull.h>
+#include <Rendering/Renderer/MeshRenderer.h>
+
 #include <atomic>
 
 #include <Rendering/Graphics_Server.h>
@@ -97,6 +100,147 @@ void dooms::graphics::DeferredRenderingPipeLine::DrawHiZQuad()
 	{
 		mHiZQuadMesh->Draw();
 	}
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(dooms::Camera* const targetCamera, const size_t cameraIndex)
+{
+	if (graphicsSetting::IsHiZHullOccludeeEnabled == false ||
+		bmIsHiZReadbackDataValid == false ||
+		mHiZReadbackData.empty())
+	{
+		return;
+	}
+
+	const std::chrono::steady_clock::time_point testStartTime = std::chrono::steady_clock::now();
+
+	const math::Matrix4x4 viewProjectionMatrix = targetCamera->GetViewProjectionMatrix();
+
+	const std::vector<Renderer*>& renderers = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
+
+	for (Renderer* const renderer : renderers)
+	{
+		if (IsValid(renderer) == false || renderer->GetIsComponentEnabled() == false)
+		{
+			continue;
+		}
+
+		culling::EntityBlockViewer& viewer = renderer->mCullingEntityBlockViewer;
+		if (viewer.IsValid() == false)
+		{
+			continue;
+		}
+
+		culling::EntityBlock* const entityBlock = viewer.GetTargetEntityBlock();
+		const UINT32 entityIndex = viewer.GetEntityIndexInBlock();
+
+		// Already gone by the frustum, by distance, or by the box test. This
+		// only pays for the ones those could not decide.
+		if (entityBlock->GetIsCulled(entityIndex, cameraIndex) == true)
+		{
+			continue;
+		}
+
+		const dooms::MeshRenderer* const meshRenderer = dooms::CastTo<const dooms::MeshRenderer*>(renderer);
+		if (IsValid(meshRenderer) == false)
+		{
+			continue;
+		}
+
+		const OccludeeHull& hull = GetOccludeeHull(meshRenderer->GetMesh());
+		if (hull.mVertices.empty())
+		{
+			continue;
+		}
+
+		const math::Matrix4x4 modelViewProjection = viewProjectionMatrix * renderer->GetModelMatrix();
+
+		FLOAT32 minU = 1.0f;
+		FLOAT32 maxU = 0.0f;
+		FLOAT32 minV = 1.0f;
+		FLOAT32 maxV = 0.0f;
+		FLOAT32 nearestNDCZ = 1.0f;
+
+		bool bIsTestable = true;
+
+		for (const math::Vector3& hullVertex : hull.mVertices)
+		{
+			const math::Vector4 clipPosition = modelViewProjection * math::Vector4(hullVertex.x, hullVertex.y, hullVertex.z, 1.0f);
+
+			// Straddling the near plane, where the projection is not usable and
+			// a wrong answer would remove something in front of the camera.
+			if (clipPosition.w <= 0.0001f)
+			{
+				bIsTestable = false;
+				break;
+			}
+
+			const FLOAT32 inverseW = 1.0f / clipPosition.w;
+			const FLOAT32 ndcX = clipPosition.x * inverseW;
+			const FLOAT32 ndcY = clipPosition.y * inverseW;
+			const FLOAT32 ndcZ = clipPosition.z * inverseW;
+
+			// Same mapping the box path uses, taken straight from ndc: u runs
+			// left to right, v is flipped because the pyramid's first row is the
+			// top of the screen while ndc y is positive upwards.
+			const FLOAT32 u = (ndcX + 1.0f) * 0.5f;
+			const FLOAT32 v = (1.0f - ndcY) * 0.5f;
+
+			minU = math::Min(minU, u);
+			maxU = math::Max(maxU, u);
+			minV = math::Min(minV, v);
+			maxV = math::Max(maxV, v);
+
+			nearestNDCZ = math::Min(nearestNDCZ, ndcZ);
+		}
+
+		if (bIsTestable == false)
+		{
+			continue;
+		}
+
+		// The hull contains the mesh, so its nearest vertex is the nearest the
+		// object can be. That is the whole point: the box's nearest corner sits
+		// well in front of a rounded rock and made it untestable against
+		// anything it was tucked behind.
+		const INT32 startX = static_cast<INT32>(math::Max(0.0f, minU) * mHiZReadbackWidth) - 1;
+		const INT32 endX = static_cast<INT32>(math::Min(1.0f, maxU) * mHiZReadbackWidth) + 1;
+		const INT32 startY = static_cast<INT32>(math::Max(0.0f, minV) * mHiZReadbackHeight) - 1;
+		const INT32 endY = static_cast<INT32>(math::Min(1.0f, maxV) * mHiZReadbackHeight) + 1;
+
+		if (startX > endX || startY > endY)
+		{
+			continue;
+		}
+
+		bool bIsOccluded = true;
+
+		for (INT32 y = math::Max(0, startY); bIsOccluded && y <= endY && y < static_cast<INT32>(mHiZReadbackHeight); y++)
+		{
+			const FLOAT32* const row = mHiZReadbackData.data() + static_cast<size_t>(y) * mHiZReadbackWidth;
+
+			for (INT32 x = math::Max(0, startX); x <= endX && x < static_cast<INT32>(mHiZReadbackWidth); x++)
+			{
+				if (nearestNDCZ < row[x])
+				{
+					bIsOccluded = false;
+					break;
+				}
+			}
+		}
+
+		if (bIsOccluded)
+		{
+			entityBlock->SetCulled(entityIndex, cameraIndex);
+		}
+	}
+
+	GetOccludeeHullStatistics(
+		graphicsSetting::CullStatHullMeshCount,
+		graphicsSetting::CullStatHullVertexCount);
+
+	graphicsSetting::CpuStatHiZTestMilliseconds += static_cast<FLOAT32>(
+		std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+			std::chrono::steady_clock::now() - testStartTime).count());
 }
 
 void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex)
@@ -643,7 +787,11 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 				continue;
 			}
 
-			const FLOAT32 objectNDCZ = entityBlock->mAABBMinNDCZ[entityIndex];
+			// The probe pushes the tested depth away from the camera, standing
+			// in for a proxy whose nearest point is not a box corner sticking
+			// out in front of the object.
+			const FLOAT32 objectNDCZ =
+				entityBlock->mAABBMinNDCZ[entityIndex] + graphicsSetting::HiZProbeDepthPush;
 
 			observedMinNDCZ = (objectNDCZ < observedMinNDCZ) ? objectNDCZ : observedMinNDCZ;
 			observedMaxNDCZ = (objectNDCZ > observedMaxNDCZ) ? objectNDCZ : observedMaxNDCZ;
@@ -667,10 +815,30 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 			// which can only raise the farthest depth found, which can only make
 			// the test less willing to cull. The error goes towards drawing
 			// something needlessly rather than dropping something visible.
-			const INT32 startX = static_cast<INT32>(math::Max(0.0f, minU) * mHiZReadbackWidth) - 1;
-			const INT32 endX = static_cast<INT32>(math::Min(1.0f, maxU) * mHiZReadbackWidth) + 1;
-			const INT32 startY = static_cast<INT32>(math::Max(0.0f, minV) * mHiZReadbackHeight) - 1;
-			const INT32 endY = static_cast<INT32>(math::Min(1.0f, maxV) * mHiZReadbackHeight) + 1;
+			// The probe insets the rectangle towards its centre, standing in for
+			// a silhouette that follows the object rather than boxing it.
+			FLOAT32 probedMinU = minU;
+			FLOAT32 probedMaxU = maxU;
+			FLOAT32 probedMinV = minV;
+			FLOAT32 probedMaxV = maxV;
+
+			if (graphicsSetting::HiZProbeRectangleShrink > 0.0f)
+			{
+				const FLOAT32 shrink = math::Min(0.49f, graphicsSetting::HiZProbeRectangleShrink);
+
+				const FLOAT32 insetU = (maxU - minU) * shrink;
+				const FLOAT32 insetV = (maxV - minV) * shrink;
+
+				probedMinU += insetU;
+				probedMaxU -= insetU;
+				probedMinV += insetV;
+				probedMaxV -= insetV;
+			}
+
+			const INT32 startX = static_cast<INT32>(math::Max(0.0f, probedMinU) * mHiZReadbackWidth) - 1;
+			const INT32 endX = static_cast<INT32>(math::Min(1.0f, probedMaxU) * mHiZReadbackWidth) + 1;
+			const INT32 startY = static_cast<INT32>(math::Max(0.0f, probedMinV) * mHiZReadbackHeight) - 1;
+			const INT32 endY = static_cast<INT32>(math::Min(1.0f, probedMaxV) * mHiZReadbackHeight) + 1;
 
 			if (startX > endX || startY > endY)
 			{
@@ -1134,6 +1302,7 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	// Before the Hi-Z test, so it can skip whatever this already removed.
 	ApplyBVHFrustumCulling(targetCamera, cameraIndex);
 	ApplyHiZOcclusionCulling(cameraIndex);
+	ApplyHiZHullOcclusionCulling(targetCamera, cameraIndex);
 	UpdateCullStatistics(cameraIndex);
 
 	if (dooms::graphics::graphicsSetting::IsSortObjectFrontToBack == true)

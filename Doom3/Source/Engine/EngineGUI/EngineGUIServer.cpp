@@ -1098,6 +1098,40 @@ void dooms::ui::EngineGUIServer::Update()
         ShowNotification("Hi-Z test grid: %u wide", targetWidth);
     }
 
+    // J and K step the two attribution probes, so the cost of the box's area
+    // and the cost of its protruding near corner can be separated.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_J))
+    {
+        FLOAT32& shrink = dooms::graphics::graphicsSetting::HiZProbeRectangleShrink;
+
+        shrink = (shrink >= 0.29f) ? 0.0f : (shrink + 0.10f);
+
+        ShowNotification("Probe: rectangle inset %.0f%%", shrink * 100.0f);
+    }
+
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_K))
+    {
+        FLOAT32& depthPush = dooms::graphics::graphicsSetting::HiZProbeDepthPush;
+
+        depthPush = (depthPush >= 0.0029f) ? 0.0f : (depthPush + 0.0010f);
+
+        ShowNotification("Probe: depth push %.4f", depthPush);
+    }
+
+    // N swaps the occludee shape between the bounding box and the mesh's
+    // convex hull, which is the comparison the hull exists to make.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_N))
+    {
+        dooms::graphics::graphicsSetting::IsHiZHullOccludeeEnabled =
+            !dooms::graphics::graphicsSetting::IsHiZHullOccludeeEnabled;
+
+        ShowNotification("Occludee shape: %s",
+            dooms::graphics::graphicsSetting::IsHiZHullOccludeeEnabled ? "Convex hull" : "Bounding box");
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {

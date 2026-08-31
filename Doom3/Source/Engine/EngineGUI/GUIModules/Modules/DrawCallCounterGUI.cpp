@@ -56,6 +56,13 @@ void dooms::ui::DrawCallCounterGUI::Render()
 				dooms::graphics::graphicsSetting::CullStatDrawnRendererCount);
 		}
 
+		if (dooms::graphics::graphicsSetting::IsHiZHullOccludeeEnabled)
+		{
+			ImGui::Text("Hulls      : %u meshes, %u verts",
+				dooms::graphics::graphicsSetting::CullStatHullMeshCount,
+				dooms::graphics::graphicsSetting::CullStatHullVertexCount);
+		}
+
 		// What a perfect culler would have managed, beside what this one did.
 		// The gap is the headroom every culling technique is competing for.
 		if (dooms::graphics::graphicsSetting::CullStatOracleTestedCount > 0)
