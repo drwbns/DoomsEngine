@@ -1,5 +1,8 @@
 #include "MeshRenderer.h"
 
+#include <Rendering/Lod/MeshLod.h>
+#include <Graphics/graphicsSetting.h>
+
 #include "Asset/ThreeDModelAsset.h"
 
 
@@ -83,7 +86,30 @@ void dooms::MeshRenderer::Draw()
 	D_ASSERT(IsValid(mTargetMesh));
 	if (IsValid(mTargetMesh))
 	{
-		mTargetMesh->Draw();
+		// The bounds PreCulling already produced, so choosing a level costs a
+		// subtraction and a multiply rather than anything of its own.
+		const graphics::Mesh* meshToDraw = mTargetMesh;
+
+		if (graphics::graphicsSetting::IsMeshLodEnabled && mCullingEntityBlockViewer.IsValid())
+		{
+			const culling::EntityBlock* const entityBlock = mCullingEntityBlockViewer.GetTargetEntityBlock();
+			const UINT32 entityIndex = mCullingEntityBlockViewer.GetEntityIndexInBlock();
+
+			const FLOAT32 screenWidth =
+				entityBlock->mAABBMaxScreenSpacePointX[entityIndex] - entityBlock->mAABBMinScreenSpacePointX[entityIndex];
+			const FLOAT32 screenHeight =
+				entityBlock->mAABBMaxScreenSpacePointY[entityIndex] - entityBlock->mAABBMinScreenSpacePointY[entityIndex];
+
+			const FLOAT32 coveredPixelCount =
+				((screenWidth > 0.0f) ? screenWidth : 0.0f) * ((screenHeight > 0.0f) ? screenHeight : 0.0f);
+
+			meshToDraw = graphics::SelectMeshLod(mTargetMesh, coveredPixelCount);
+		}
+
+		if (IsValid(meshToDraw))
+		{
+			meshToDraw->Draw();
+		}
 	}
 }
 

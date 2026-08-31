@@ -1132,6 +1132,17 @@ void dooms::ui::EngineGUIServer::Update()
             dooms::graphics::graphicsSetting::IsHiZHullOccludeeEnabled ? "Convex hull" : "Bounding box");
     }
 
+    // L draws each object at a detail level matched to its size on screen.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_L))
+    {
+        dooms::graphics::graphicsSetting::IsMeshLodEnabled =
+            !dooms::graphics::graphicsSetting::IsMeshLodEnabled;
+
+        ShowNotification("Mesh detail: %s",
+            dooms::graphics::graphicsSetting::IsMeshLodEnabled ? "By screen size" : "Full");
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {
