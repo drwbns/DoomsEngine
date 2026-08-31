@@ -172,6 +172,23 @@ namespace dooms
 			/// The result written is two or three frames old. That is inherent to
 			/// asking a gpu how long it took without stalling on the answer.
 			/// </summary>
+			/// <summary>
+			/// One occlusion query per object drawn, grown as needed and reused.
+			/// </summary>
+			std::vector<unsigned long long> mVisibilityOracleQueries;
+			UINT32 mVisibilityOraclePendingCount{ 0 };
+
+			/// <summary>
+			/// Re-draws everything the geometry pass drew, against the depth
+			/// buffer it produced, counting which objects turn out to have
+			/// contributed no pixels at all.
+			///
+			/// That count is the exact answer to how much better any culling
+			/// technique could have done on this frame, which is otherwise a
+			/// matter of opinion.
+			/// </summary>
+			void MeasureTrueVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex);
+
 			void BeginGpuTimer(GpuTimerRing& gpuTimerRing, FLOAT32& destinationMilliseconds);
 			void EndGpuTimer(GpuTimerRing& gpuTimerRing);
 

@@ -1074,6 +1074,18 @@ void dooms::ui::EngineGUIServer::Update()
             dooms::graphics::graphicsSetting::IsSkipRedundantMeshBindEnabled ? "Skipped" : "Issued");
     }
 
+    // O measures what a perfect culler would have achieved on this frame.
+    // Expensive: it draws the whole scene a second time.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_O))
+    {
+        dooms::graphics::graphicsSetting::IsVisibilityOracleEnabled =
+            !dooms::graphics::graphicsSetting::IsVisibilityOracleEnabled;
+
+        ShowNotification("Visibility oracle: %s",
+            dooms::graphics::graphicsSetting::IsVisibilityOracleEnabled ? "On" : "Off");
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {

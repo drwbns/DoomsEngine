@@ -959,7 +959,13 @@ namespace dooms
 			enum eQueryType : unsigned int
 			{
 				QUERY_TIMESTAMP,
-				QUERY_TIMESTAMP_DISJOINT
+				QUERY_TIMESTAMP_DISJOINT,
+
+				// Counts samples that passed the depth test. Wrapped around a
+				// second draw of an object against the finished depth buffer, a
+				// result of zero means that object contributed nothing to the
+				// image and every millisecond spent on it was waste.
+				QUERY_OCCLUSION
 			};
 
 			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATEQUERY)(const eQueryType queryType);

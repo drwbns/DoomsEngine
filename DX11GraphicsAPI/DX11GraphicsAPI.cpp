@@ -2036,6 +2036,9 @@ namespace dooms
             case GraphicsAPI::QUERY_TIMESTAMP_DISJOINT:
                 queryDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
                 break;
+            case GraphicsAPI::QUERY_OCCLUSION:
+                queryDesc.Query = D3D11_QUERY_OCCLUSION;
+                break;
             default:
                 ASSUME_ZERO;
                 return 0;

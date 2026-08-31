@@ -56,6 +56,20 @@ void dooms::ui::DrawCallCounterGUI::Render()
 				dooms::graphics::graphicsSetting::CullStatDrawnRendererCount);
 		}
 
+		// What a perfect culler would have managed, beside what this one did.
+		// The gap is the headroom every culling technique is competing for.
+		if (dooms::graphics::graphicsSetting::CullStatOracleTestedCount > 0)
+		{
+			const unsigned int wastedCount = dooms::graphics::graphicsSetting::CullStatOracleInvisibleCount;
+			const unsigned int testedCount = dooms::graphics::graphicsSetting::CullStatOracleTestedCount;
+
+			ImGui::TextColored(
+				(wastedCount * 10u > testedCount) ? ImVec4(1.0f, 0.8f, 0.4f, 1.0f) : ImVec4(0.6f, 1.0f, 0.6f, 1.0f),
+				"Wasted     : %u of %u drawn (%.1f%%)",
+				wastedCount, testedCount,
+				(testedCount > 0) ? (100.0f * static_cast<float>(wastedCount) / static_cast<float>(testedCount)) : 0.0f);
+		}
+
 		// The two passes that touch pixels. Shown together because a depth
 		// pre-pass is a trade between them, and either number alone hides it.
 		if (dooms::graphics::graphicsSetting::GpuStatGeometryPassMilliseconds > 0.0f)

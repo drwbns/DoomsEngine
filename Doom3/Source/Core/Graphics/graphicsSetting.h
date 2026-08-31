@@ -119,6 +119,18 @@ namespace dooms
 			// driver from one held up by transforming vertices, which are very
 			// different problems with very different answers.
 			extern inline unsigned long long CullStatIndexCount{ 0 };
+
+			// The visibility oracle: what a perfect culler would have achieved.
+			//
+			// Every drawn object is re-drawn against the finished depth buffer
+			// inside an occlusion query, so an object that returns no samples
+			// contributed nothing to the image and should not have been drawn.
+			// Expensive by design and off by default; it exists to put a number
+			// on the headroom a culling technique is competing for, rather than
+			// leaving it to be guessed from a heatmap.
+			extern inline bool IsVisibilityOracleEnabled{ false };
+			extern inline unsigned int CullStatOracleTestedCount{ 0 };
+			extern inline unsigned int CullStatOracleInvisibleCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

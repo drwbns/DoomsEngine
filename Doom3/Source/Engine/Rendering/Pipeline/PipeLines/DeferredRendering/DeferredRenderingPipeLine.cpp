@@ -99,6 +99,115 @@ void dooms::graphics::DeferredRenderingPipeLine::DrawHiZQuad()
 	}
 }
 
+void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex)
+{
+	if (GraphicsAPI::CreateQuery == nullptr || GraphicsAPI::BeginQuery == nullptr ||
+		GraphicsAPI::EndQuery == nullptr || GraphicsAPI::GetQueryResult == nullptr)
+	{
+		return;
+	}
+
+	// Read last frame's answers before issuing this frame's, so the gpu has had
+	// a whole frame to finish them and nothing here ever blocks on it.
+	if (mVisibilityOraclePendingCount > 0)
+	{
+		UINT32 resolvedCount = 0;
+		UINT32 invisibleCount = 0;
+
+		for (UINT32 queryIndex = 0; queryIndex < mVisibilityOraclePendingCount; queryIndex++)
+		{
+			unsigned long long passedSampleCount = 0;
+
+			if (GraphicsAPI::GetQueryResult(
+					mVisibilityOracleQueries[queryIndex],
+					GraphicsAPI::QUERY_OCCLUSION,
+					&passedSampleCount,
+					nullptr) != 0)
+			{
+				resolvedCount++;
+
+				if (passedSampleCount == 0)
+				{
+					invisibleCount++;
+				}
+			}
+		}
+
+		// Only published when every query came back. A partial answer would
+		// read as an improvement rather than as a missing measurement.
+		if (resolvedCount == mVisibilityOraclePendingCount)
+		{
+			graphicsSetting::CullStatOracleTestedCount = resolvedCount;
+			graphicsSetting::CullStatOracleInvisibleCount = invisibleCount;
+		}
+
+		mVisibilityOraclePendingCount = 0;
+	}
+
+	if (graphicsSetting::IsVisibilityOracleEnabled == false)
+	{
+		graphicsSetting::CullStatOracleTestedCount = 0;
+		graphicsSetting::CullStatOracleInvisibleCount = 0;
+		return;
+	}
+
+	const std::vector<Renderer*>& renderers = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
+	const bool bIsCameraCulling = targetCamera->GetCameraFlag(dooms::eCameraFlag::IS_CULLED);
+
+	// Depth only, testing against the finished buffer and writing nothing to
+	// it, so this measures the frame rather than changing it.
+	FixedMaterial::GetSingleton()->SetFixedMaterial(GetDepthOnlyMaterial());
+	GraphicsAPI::SetIsDepthTestEnabled(true);
+	GraphicsAPI::SetDepthMask(false);
+	GraphicsAPI::SetDepthFunc(GraphicsAPI::eTestFuncType::LEQUAL);
+
+	Mesh::ResetBoundMeshCache();
+
+	UINT32 queryIndex = 0;
+
+	for (Renderer* const renderer : renderers)
+	{
+		if (IsValid(renderer) == false ||
+			renderer->GetIsComponentEnabled() == false ||
+			renderer->GetIsBatched() == true)
+		{
+			continue;
+		}
+
+		if (bIsCameraCulling && renderer->GetIsCulled(targetCamera->CameraIndexInCullingSystem) != 0)
+		{
+			continue;
+		}
+
+		if (queryIndex >= mVisibilityOracleQueries.size())
+		{
+			mVisibilityOracleQueries.push_back(GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_OCCLUSION));
+		}
+
+		if (mVisibilityOracleQueries[queryIndex] == 0)
+		{
+			continue;
+		}
+
+		GraphicsAPI::BeginQuery(mVisibilityOracleQueries[queryIndex]);
+		renderer->Draw();
+		GraphicsAPI::EndQuery(mVisibilityOracleQueries[queryIndex]);
+
+		queryIndex++;
+	}
+
+	mVisibilityOraclePendingCount = queryIndex;
+
+	FixedMaterial::GetSingleton()->SetFixedMaterial(nullptr);
+	GraphicsAPI::SetDepthMask(true);
+
+	// This pass drew the whole scene again. Its binds and indices belong to the
+	// measurement, not to the geometry pass being measured.
+	Mesh::GetAndResetMeshBindCount();
+	Mesh::GetAndResetIndexCount();
+	Mesh::ResetBoundMeshCache();
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::BeginGpuTimer(GpuTimerRing& gpuTimerRing, FLOAT32& destinationMilliseconds)
 {
 	if (GraphicsAPI::CreateQuery == nullptr || GraphicsAPI::BeginQuery == nullptr ||
@@ -1089,6 +1198,10 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 
 		D_END_PROFILING(RenderObject);
 	}
+
+	// After the geometry pass, so the depth buffer it tests against is the
+	// finished one and a zero result really does mean invisible.
+	MeasureTrueVisibility(targetCamera, cameraIndex);
 
 	// Overdraw gets its own pass over the scene. It forces every renderer onto a
 	// material that adds a fixed amount per fragment, which cannot be shared
