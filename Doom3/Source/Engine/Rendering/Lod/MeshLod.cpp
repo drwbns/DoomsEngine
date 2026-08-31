@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <vector>
+#include <Vector3.h>
 #include <cmath>
 
 #include <Rendering/Buffer/Mesh.h>
@@ -153,7 +154,66 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 				continue;
 			}
 
-			// Nothing but a gpu buffer is created here. Constructing engine
+			// The vertices this level actually uses, gathered and renumbered.
+			//
+			// Without this the level indexes scattered positions in the full
+			// buffer, which measured slower than drawing the whole mesh. Packed
+			// densely, the fetches are sequential again and a vertex serves
+			// several triangles again.
+			std::unordered_map<UINT32, UINT32> compactedIndexForOriginal;
+			std::vector<UINT32> originalForCompacted;
+
+			compactedIndexForOriginal.reserve(simplifiedIndices.size());
+			originalForCompacted.reserve(simplifiedIndices.size());
+
+			for (UINT32& index : simplifiedIndices)
+			{
+				const auto inserted = compactedIndexForOriginal.emplace(
+					index, static_cast<UINT32>(originalForCompacted.size()));
+
+				if (inserted.second)
+				{
+					originalForCompacted.push_back(index);
+				}
+
+				index = inserted.first->second;
+			}
+
+			// Five contiguous arrays of Vector3, exactly as MeshData lays them
+			// out, so the offsets can be computed the same way the mesh's own
+			// are. They differ from the mesh's because they depend on how many
+			// vertices come before each array.
+			const size_t compactedVertexCount = originalForCompacted.size();
+			const size_t attributeSize = sizeof(math::Vector3) * compactedVertexCount;
+
+			std::vector<char> compactedVertexData(attributeSize * 5);
+
+			const math::Vector3* const sourceAttributes[5] =
+			{
+				modelMesh->mMeshDatas.mVertex,
+				modelMesh->mMeshDatas.mTexCoord,
+				modelMesh->mMeshDatas.mNormal,
+				modelMesh->mMeshDatas.mTangent,
+				modelMesh->mMeshDatas.mBitangent
+			};
+
+			for (size_t attributeIndex = 0; attributeIndex < 5; attributeIndex++)
+			{
+				if (sourceAttributes[attributeIndex] == nullptr)
+				{
+					continue;
+				}
+
+				math::Vector3* const destination =
+					reinterpret_cast<math::Vector3*>(compactedVertexData.data() + attributeSize * attributeIndex);
+
+				for (size_t vertexIndex = 0; vertexIndex < compactedVertexCount; vertexIndex++)
+				{
+					destination[vertexIndex] = sourceAttributes[attributeIndex][originalForCompacted[vertexIndex]];
+				}
+			}
+
+			// Nothing but gpu buffers are created here. Constructing engine
 			// objects part way through a draw loop is what the first attempt at
 			// this did, and it took the process with it.
 			const BufferID indexBuffer = GraphicsAPI::CreateBufferObject(
@@ -162,7 +222,13 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 				nullptr,
 				false);
 
-			if (indexBuffer.IsValid() == false)
+			const BufferID vertexBuffer = GraphicsAPI::CreateBufferObject(
+				GraphicsAPI::eBufferTarget::ARRAY_BUFFER,
+				compactedVertexData.size(),
+				compactedVertexData.data(),
+				false);
+
+			if (indexBuffer.IsValid() == false || vertexBuffer.IsValid() == false)
 			{
 				break;
 			}
@@ -177,6 +243,13 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 			MeshLodLevel level;
 			level.mIndexBuffer = indexBuffer;
 			level.mIndexCount = simplifiedIndices.size();
+			level.mVertexBuffer = vertexBuffer;
+			level.mVertexCount = compactedVertexCount;
+
+			for (size_t attributeIndex = 0; attributeIndex < 5; attributeIndex++)
+			{
+				level.mLayoutOffsets[attributeIndex] = static_cast<unsigned int>(attributeSize * attributeIndex);
+			}
 
 			chain.mLevels.push_back(level);
 

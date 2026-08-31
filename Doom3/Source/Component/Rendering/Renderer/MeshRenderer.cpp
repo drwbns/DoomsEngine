@@ -108,7 +108,11 @@ void dooms::MeshRenderer::Draw()
 
 		if (lodLevel != nullptr)
 		{
-			mTargetMesh->DrawWithIndexBuffer(lodLevel->mIndexBuffer, lodLevel->mIndexCount);
+			mTargetMesh->DrawWithLodBuffers(
+				lodLevel->mVertexBuffer,
+				lodLevel->mLayoutOffsets,
+				lodLevel->mIndexBuffer,
+				lodLevel->mIndexCount);
 		}
 		else
 		{

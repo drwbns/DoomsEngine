@@ -612,6 +612,48 @@ unsigned long long dooms::graphics::Mesh::GetAndResetIndexCount()
 	return indexCount;
 }
 
+void dooms::graphics::Mesh::DrawWithLodBuffers(
+	const BufferID& vertexBuffer,
+	const unsigned int* const layoutOffsets,
+	const BufferID& indexBuffer,
+	const unsigned long long indexCount) const
+{
+	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
+
+	if (vertexBuffer.IsValid() == false || indexBuffer.IsValid() == false || indexCount == 0)
+	{
+		Draw();
+		return;
+	}
+
+	// A different buffer entirely, so the mesh bind cache cannot vouch for what
+	// is bound and the next full detail draw has to rebind.
+	ResetBoundMeshCache();
+	MESH_BIND_COUNT++;
+
+	for (UINT32 bufferLayoutIndex = 0; bufferLayoutIndex < mVertexBufferLayoutCount; bufferLayoutIndex++)
+	{
+		BOUND_VERTEX_BUFFER_ID[bufferLayoutIndex] = vertexBuffer;
+
+		GraphicsAPI::BindVertexDataBuffer(
+			vertexBuffer,
+			bufferLayoutIndex,
+			mVertexBufferLayouts[bufferLayoutIndex].mStride,
+			layoutOffsets[bufferLayoutIndex]);
+	}
+
+	if (BOUND_INDEX_BUFFER_ID != indexBuffer.GetBufferID())
+	{
+		INDEX_BIND_COUNT++;
+		BOUND_INDEX_BUFFER_ID = indexBuffer;
+		GraphicsAPI::BindBuffer(indexBuffer, 0, GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER, GraphicsAPI::eGraphicsPipeLineStage::DUMMY);
+	}
+
+	INDEX_COUNT += indexCount;
+
+	GraphicsAPI::DrawIndexed(mPrimitiveType, indexCount);
+}
+
 void dooms::graphics::Mesh::DrawWithIndexBuffer(const BufferID& indexBuffer, const unsigned long long indexCount) const
 {
 	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);

@@ -219,6 +219,20 @@ namespace dooms
 		void DrawWithIndexBuffer(const BufferID& indexBuffer, const unsigned long long indexCount) const;
 
 		/// <summary>
+		/// Draw a detail level: its own vertices, its own indices, and the
+		/// attribute offsets that belong to a buffer of that many vertices.
+		///
+		/// The offsets cannot be the mesh's own. Vertex data is five contiguous
+		/// arrays, so where the texture coordinates begin depends on how many
+		/// vertices come before them.
+		/// </summary>
+		void DrawWithLodBuffers(
+			const BufferID& vertexBuffer,
+			const unsigned int* const layoutOffsets,
+			const BufferID& indexBuffer,
+			const unsigned long long indexCount) const;
+
+		/// <summary>
 		/// Indices submitted since this was last called.
 		/// </summary>
 		static unsigned long long GetAndResetIndexCount();

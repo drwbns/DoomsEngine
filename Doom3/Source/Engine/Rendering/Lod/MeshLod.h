@@ -32,6 +32,21 @@ namespace dooms
 		{
 			BufferID mIndexBuffer{};
 			unsigned long long mIndexCount{ 0 };
+
+			/// <summary>
+			/// The level's own vertices, compacted.
+			///
+			/// Sharing the mesh's vertex buffer was tried first and measured: it
+			/// costs no memory and it is slower than drawing the full mesh.
+			/// Clustering leaves representatives scattered across the original
+			/// buffer, so a coarse level fetches three vertices per triangle from
+			/// random places in a buffer of a thousand, loses sequential
+			/// prefetch, and loses the reuse that had each vertex serving six
+			/// triangles. Cutting triangles by 73% made the pass 32% slower.
+			/// </summary>
+			BufferID mVertexBuffer{};
+			unsigned long long mVertexCount{ 0 };
+			unsigned int mLayoutOffsets[5]{ 0, 0, 0, 0, 0 };
 		};
 
 		/// <summary>
