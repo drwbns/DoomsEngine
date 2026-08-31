@@ -24,7 +24,14 @@ namespace dooms
 #define CPP_VERSION_COMPILER_OPTION_FOR_CLANG "-std=c++20"
 #endif
 
-		inline extern const char* const clReflectAdditionalCompilerOptionsPortable = "-fno-rtti -DUNICODE -D_HAS_STATIC_RTTI=0 -mavx2";
+		// _CRT_USE_BUILTIN_OFFSETOF makes the ucrt define offsetof as
+		// __builtin_offsetof instead of a reinterpret_cast through a null
+		// pointer. The cast version is not a constant expression, so clang
+		// rejects any static_assert built on it, which is how imgui checks its
+		// own struct layouts. Without this, clscan fails on imgui_draw.cpp and
+		// imgui_widgets.cpp, and clmerge then fails because their csv files are
+		// missing. MSVC does not hit it because it has its own builtin.
+		inline extern const char* const clReflectAdditionalCompilerOptionsPortable = "-fno-rtti -DUNICODE -D_HAS_STATIC_RTTI=0 -D_CRT_USE_BUILTIN_OFFSETOF -mavx2";
 
 		inline extern const char* const clReflectAdditionalCompilerOptionsForScpecificCompiler
 #if defined(__GNUC__)  || defined( __clang__)
