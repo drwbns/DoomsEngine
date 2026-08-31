@@ -112,6 +112,13 @@ namespace dooms
 			// How many mesh binds the geometry pass issued, against how many
 			// draws. Equal means every draw rebound its geometry.
 			extern inline unsigned int CullStatMeshBindCount{ 0 };
+
+			// Indices submitted by the geometry pass.
+			//
+			// The one number that separates a pass held up by talking to the
+			// driver from one held up by transforming vertices, which are very
+			// different problems with very different answers.
+			extern inline unsigned long long CullStatIndexCount{ 0 };
 			extern inline bool DrawRenderingBoundingBox{ false };
 			extern inline float DefaultClearColor[4]{ 0.0f, 0.0f, 0.0f, 1.0f };
 

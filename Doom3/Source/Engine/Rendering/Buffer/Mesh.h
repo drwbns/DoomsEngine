@@ -185,6 +185,7 @@ namespace dooms
 
 
 			inline static unsigned int MESH_BIND_COUNT = 0;
+		inline static unsigned long long INDEX_COUNT = 0;
 
 		void Draw() const;
 
@@ -202,6 +203,11 @@ namespace dooms
 		/// Mesh binds issued since this was last called.
 		/// </summary>
 		static unsigned int GetAndResetMeshBindCount();
+
+		/// <summary>
+		/// Indices submitted since this was last called.
+		/// </summary>
+		static unsigned long long GetAndResetIndexCount();
 			void DrawArray(const INT32 startVertexLocation, const UINT32 vertexCount) const;
 			void DrawArray(const GraphicsAPI::ePrimitiveType primitiveType, const INT32 startVertexLocation, const INT32 vertexCount) const;
 

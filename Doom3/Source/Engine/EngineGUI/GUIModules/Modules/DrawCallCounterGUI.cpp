@@ -50,6 +50,7 @@ void dooms::ui::DrawCallCounterGUI::Render()
 		if (dooms::graphics::graphicsSetting::CullStatDrawGroupCount > 0)
 		{
 			ImGui::Text("Mesh binds : %u", dooms::graphics::graphicsSetting::CullStatMeshBindCount);
+			ImGui::Text("Triangles  : %.2f M", static_cast<double>(dooms::graphics::graphicsSetting::CullStatIndexCount) / 3000000.0);
 			ImGui::Text("Draw groups: %u for %u objects",
 				dooms::graphics::graphicsSetting::CullStatDrawGroupCount,
 				dooms::graphics::graphicsSetting::CullStatDrawnRendererCount);

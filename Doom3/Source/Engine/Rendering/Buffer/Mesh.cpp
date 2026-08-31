@@ -573,6 +573,13 @@ unsigned int dooms::graphics::Mesh::GetAndResetMeshBindCount()
 	return meshBindCount;
 }
 
+unsigned long long dooms::graphics::Mesh::GetAndResetIndexCount()
+{
+	const unsigned long long indexCount = INDEX_COUNT;
+	INDEX_COUNT = 0;
+	return indexCount;
+}
+
 void dooms::graphics::Mesh::Draw() const
 {
 	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
@@ -607,6 +614,7 @@ void dooms::graphics::Mesh::Draw() const
 			BindIndexBufferObject();
 		}
 
+		INDEX_COUNT += mNumOfIndices;
 		GraphicsAPI::DrawIndexed(mPrimitiveType, mNumOfIndices);
 	}
 	else

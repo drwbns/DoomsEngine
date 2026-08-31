@@ -353,6 +353,7 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 			graphicsSetting::CullStatDrawGroupCount = static_cast<unsigned int>(
 				std::unique(drawStateKeys.begin(), drawStateKeys.end()) - drawStateKeys.begin());
 			graphicsSetting::CullStatMeshBindCount = Mesh::GetAndResetMeshBindCount();
+			graphicsSetting::CullStatIndexCount = Mesh::GetAndResetIndexCount();
 		}
 
 		D_END_PROFILING(DrawLoop);
