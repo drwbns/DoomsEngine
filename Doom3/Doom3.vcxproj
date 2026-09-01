@@ -512,6 +512,7 @@ xcopy /y /d /E /H /C /I "$(ProjectDir)Assets" "$(TargetDir)Assets"</Command>
     <ClCompile Include="Source\Engine\Misc\CommandLine.cpp" />
     <ClCompile Include="Source\Engine\Misc\LatentActionManager.cpp" />
     <ClCompile Include="Source\Engine\Rendering\Lod\MeshLod.cpp" />
+    <ClCompile Include="Source\Engine\Rendering\Culling\ConvexHull.cpp" />
     <ClCompile Include="Source\Engine\Rendering\Culling\OccludeeHull.cpp" />
     <ClCompile Include="Source\Engine\Rendering\Culling\EveryCulling\DataType\Math\SIMD_Core.cpp" />
     <ClCompile Include="Source\Engine\Scene\Layer\DefaultLayers.cpp" />

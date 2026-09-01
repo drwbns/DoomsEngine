@@ -86,19 +86,28 @@ method but cannot honestly say whether it is better.
 
 Deliberately before new techniques, not after.
 
-`unit_tests` currently contains **zero source files**. For a harness whose
-output is comparative numbers, this is the gap that undermines the results
-themselves: a wrong number and a real number look identical.
+`unit_tests` contained **zero source files**. For a harness whose output is
+comparative numbers, that was the gap undermining the results themselves: a
+wrong number and a real number look identical.
 
 The `ConsumeToken` off-by-one found in this codebase had been silently
 corrupting memory for years and would have been caught by a five-line test.
 
-Minimum worth having:
+Now covered, 25 tests over three files:
 
-- Frustum culling: known-inside, known-outside, straddling.
-- The tiled depth buffer: tile alignment, the rounding introduced by
-  `EveryCulling::SetResolution`, resize correctness.
-- Occludee/occluder selection at known configurations.
+- Frustum plane extraction, against a canonical camera whose six planes are
+  known exactly rather than against a second copy of the same formulas, plus
+  the SIMD extractor's transposed storage layout.
+- The end-to-end frustum job: known-inside, known-outside, straddling.
+- The tiled depth buffer's tile alignment and the rounding `SetResolution`
+  introduces, extracted into `GetTiledResolution` so it is testable without
+  constructing a culling system.
+- The convex hull's containment property, exact and decimated.
+- Level of detail selection boundaries.
+
+Both discoveries are written up in the `Next` section: the frustum test is an
+intersection test rather than a containment one, and the hull decimation was
+not conservative despite its name.
 
 ### 6. New techniques
 
@@ -543,16 +552,23 @@ Ordered by what would change a decision, not by size.
 
 ### Correctness
 
-1. **Tests around the culling math.** `unit_tests` still has no source files.
-   This has been on the list since the beginning and is now the most valuable
-   item on it: over one session three technique verdicts inverted and the cost
-   model turned out to be fitting object count while being read as triangle
-   count. Nothing here is checked by anything except a person looking at a
-   screen and the visibility oracle. Minimum worth having: frustum plane
-   extraction against known inside, outside and straddling boxes; the tile
-   alignment and rounding in `SetResolution`; the hull's containment property,
-   which everything conservative depends on; and the level of detail selection
-   boundaries.
+1. ~~**Tests around the culling math.**~~ **Done.** `unit_tests` now holds 25
+   tests over three files, all passing, linking the whole EveryCulling library
+   standalone: frustum plane extraction against a canonical camera's exact
+   planes, the SIMD extractor's transposed storage layout, tile rounding, the
+   hull's containment property, and the level of detail selection boundaries.
+
+   Two things came out of writing them. The frustum test is an *intersection*
+   test, not a containment one — `CheckInFrustumSIMDWithTwoPoint` compares
+   `dot(plane, centre) > -(radius + margin)`, the radius negated by a bitwise
+   OR against `-0.0` — so a sphere straddling a plane is kept, which is the
+   conservative direction. And `DecimateHullConservatively` was not
+   conservative: its radial heuristic let 14 of 60 hull vertices fall outside
+   the decimated hull, which would have culled visible objects wherever the
+   proxy was used as an occludee. It now scales the kept hull about its own
+   centroid by the exact factor its face planes require. That bug had been
+   sitting under a function whose name asserted the opposite, and nothing but
+   a test was ever going to find it.
 
 2. **Two-phase occlusion culling.** The principled fix for the readback
    staleness that a one cell margin currently papers over. That margin is also
