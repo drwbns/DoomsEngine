@@ -349,18 +349,7 @@ const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* 
 	const unsigned long long affordableIndexCount =
 		static_cast<unsigned long long>((affordableTriangleCount > 0.0f) ? (affordableTriangleCount * 3.0f) : 0.0f);
 
-	// Coarsest first, so the answer is the cheapest level that still has enough
-	// triangles to be worth having. Level zero is full detail and always
-	// qualifies, so this cannot fall off the end.
-	for (size_t levelIndex = chain.mLevels.size(); levelIndex-- > 0; )
-	{
-		if (chain.mLevels[levelIndex].mIndexCount >= affordableIndexCount)
-		{
-			return &chain.mLevels[levelIndex];
-		}
-	}
-
-	return &chain.mLevels[0];
+	return &chain.mLevels[SelectMeshLodLevelIndex(chain.mLevels, affordableIndexCount)];
 }
 
 void dooms::graphics::GetMeshLodStatistics(unsigned int& outMeshCount, unsigned int& outLevelCount)

@@ -89,6 +89,29 @@ namespace dooms
 		const MeshLodLevel* SelectMeshLod(const Mesh* const mesh, const float coveredPixelCount, const MeshLodChain** outChain);
 
 		/// <summary>
+		/// Which level of a chain an object with the given screen coverage is
+		/// drawn at, as an index into the chain.
+		///
+		/// The selection logic separated from SelectMeshLod, which cannot run
+		/// without a graphics device and a mesh, so the boundaries -- the exact
+		/// coverage where an object steps between levels -- were previously
+		/// checked by nobody. Coarsest first, and level zero always qualifies,
+		/// so the answer can never fall off the end.
+		/// </summary>
+		inline unsigned int SelectMeshLodLevelIndex(const std::vector<MeshLodLevel>& levels, const unsigned long long affordableIndexCount)
+		{
+			for (size_t levelIndex = levels.size(); levelIndex-- > 0; )
+			{
+				if (levels[levelIndex].mIndexCount >= affordableIndexCount)
+				{
+					return static_cast<unsigned int>(levelIndex);
+				}
+			}
+
+			return 0;
+		}
+
+		/// <summary>
 		/// Meshes with levels, and levels built, for the overlay.
 		/// </summary>
 		void GetMeshLodStatistics(unsigned int& outMeshCount, unsigned int& outLevelCount);

@@ -116,15 +116,16 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Source\thirdparty;$(SolutionDir)Source\thirdparty\oneTBB\include;C:\assimp-5.1.5\build\include;$(SolutionDir)..\OpenGLGraphicsAPI;$(SolutionDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(SolutionDir)..\DX11GraphicsAPI;C:\assimp-5.1.5\include\;$(SolutionDir);$(SolutionDir)Source\Core\OS;$(VcpkgInstalledDir)installed\x64-windows\include;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\LightMath_Cpp;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_automation\clReflect\inc;$(SolutionDir)Source\thirdparty\imgui;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Plugins;$(SolutionDir)Source\thirdparty\googletest\googletest\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Source\thirdparty;$(SolutionDir)Source\thirdparty\oneTBB\include;C:\assimp-5.1.5\build\include;$(SolutionDir)..\OpenGLGraphicsAPI;$(SolutionDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(SolutionDir)..\DX11GraphicsAPI;C:\assimp-5.1.5\include\;$(SolutionDir);$(SolutionDir)Source\Core\OS;$(VcpkgInstalledDir)installed\x64-windows\include;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\JINMATH;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_ForDoomsEngine\inc;$(SolutionDir)Source\thirdparty\imgui;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Plugins;$(SolutionDir)ThirdParty\assimp\contrib\gtest\include;$(SolutionDir)ThirdParty\assimp\contrib\gtest</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)Source\thirdparty\googletest\build\lib\Release;$(ProjectDir)Source\thirdparty\googletest\build\lib\Debug;C:\Program Files %28x86%29\Microsoft Visual Studio\2019\Professional\VC\Tools\MSVC\14.29.30133\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies);gtest_maind.lib;gtestd.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files %28x86%29\Microsoft Visual Studio\2019\Professional\VC\Tools\MSVC\14.29.30133\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -135,7 +136,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Source\thirdparty;$(SolutionDir)Source\thirdparty\oneTBB\include;C:\assimp-5.1.5\build\include;$(SolutionDir)..\OpenGLGraphicsAPI;$(SolutionDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(SolutionDir)..\DX11GraphicsAPI;C:\assimp-5.1.5\include\;$(SolutionDir);$(SolutionDir)Source\Core\OS;$(VcpkgInstalledDir)installed\x64-windows\include;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\LightMath_Cpp;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_automation\clReflect\inc;$(SolutionDir)Source\thirdparty\imgui;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Plugins;$(SolutionDir)Source\thirdparty\googletest\googletest\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Source\thirdparty;$(SolutionDir)Source\thirdparty\oneTBB\include;C:\assimp-5.1.5\build\include;$(SolutionDir)..\OpenGLGraphicsAPI;$(SolutionDir)Source\Core\Reflection\AdditionalDirectoryForClang;$(SolutionDir)..\DX11GraphicsAPI;C:\assimp-5.1.5\include\;$(SolutionDir);$(SolutionDir)Source\Core\OS;$(VcpkgInstalledDir)installed\x64-windows\include;$(SolutionDir)Source\Helper;$(SolutionDir)Source\Component;$(SolutionDir)Source\Core\Scene;$(SolutionDir)Source\Component\Core;$(SolutionDir)Source\Helper/crossguid;$(SolutionDir)Source\GameLogic\CustomComponent;$(SolutionDir)Source\Core\Math\JINMATH;$(SolutionDir)Source\Core\IO;$(SolutionDir)Source\Core\Time;$(SolutionDir)Source\GameLogic;$(SolutionDir)Source\Core;$(SolutionDir)Source\Core\Logger;$(SolutionDir)Source\Core\Physics;$(SolutionDir)Source\Core\utility;$(SolutionDir)Source\Core\Reflection\clReflect_ForDoomsEngine\inc;$(SolutionDir)Source\thirdparty\imgui;$(SolutionDir)Source\Engine;$(SolutionDir)Source\Plugins;$(SolutionDir)ThirdParty\assimp\contrib\gtest\include;$(SolutionDir)ThirdParty\assimp\contrib\gtest</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -146,6 +148,40 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="test\test.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="test\EveryCullingTests.cpp" />
+    <ClCompile Include="test\ConvexHullTests.cpp" />
+    <ClCompile Include="test\MeshLodSelectionTests.cpp" />
+    <ClCompile Include="..\Doom3\ThirdParty\assimp\contrib\gtest\src\gtest-all.cc" />
+    <ClCompile Include="..\Doom3\ThirdParty\assimp\contrib\gtest\src\gtest_main.cc" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\ConvexHull.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\EveryCulling.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\EveryCullingProfiler.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\CullingModule.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\DistanceCulling\DistanceCulling.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\PreCulling\PreCulling.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\ViewFrustumCulling\ViewFrustumCulling.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\MaskedSWOcclusionCulling.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\OccluderListManager.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\SWDepthBuffer.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Stage\BinTrianglesStage.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Stage\MaskedSWOcclusionCullingStage.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Stage\QueryOccludeeStage.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Stage\RasterizeOccludersStage.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Stage\SolveMeshRoleStage.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\CoverageRasterizer.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\DepthValueComputer.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\RasterizerHelper.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\clipTriangle.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\depthBufferTileHelper.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\depthUtility.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\triangleSlopeEventGetter.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\CullingModule\MaskedSWOcclusionCulling\Utility\vertexTransformationHelper.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\DataType\EntityBlock.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\DataType\EntityBlockViewer.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\DataType\Math\Common.cpp" />
+    <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\EveryCulling\DataType\Math\SIMD_Core.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

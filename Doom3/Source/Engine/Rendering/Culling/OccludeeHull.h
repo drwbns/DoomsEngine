@@ -45,5 +45,9 @@ namespace dooms
 		/// is the number that says whether the technique can be afforded.
 		/// </summary>
 		void GetOccludeeHullStatistics(unsigned int& outMeshCount, unsigned int& outTotalVertexCount);
+
+		// The hull construction itself, and a containment test used by the
+		// unit tests, live in ConvexHull.h: pure geometry over plain vertex
+		// lists, with no mesh system attached.
 	}
 }
