@@ -403,6 +403,9 @@ namespace
         { "Frustum + Hi-Z",         true, false, true  }
     };
 
+    // Frustum plus Hi-Z, the best of the four on every frame measured.
+    constexpr INT32 gBestMeasuredOcclusionModeIndex = 3;
+
     constexpr INT32 gOcclusionModeCount
         = static_cast<INT32>(sizeof(gOcclusionModes) / sizeof(gOcclusionModes[0]));
 
@@ -716,7 +719,24 @@ void dooms::ui::EngineGUIServer::PreRender()
 
     if (bHasSyncedOcclusionMode == false)
     {
+        // Read what the engine booted with first, so the labels are right even
+        // if applying a mode below fails.
         bHasSyncedOcclusionMode = SyncOcclusionModeFromEngine();
+
+        if (bHasSyncedOcclusionMode)
+        {
+            // Then move it to the configuration this harness measured as the
+            // best of the ones it can produce. config.ini boots into frustum
+            // plus software occlusion; Hi-Z culls more of the scene for a fifth
+            // of the cpu, which was measured on identical frozen frames with
+            // the rendered output verified the same.
+            //
+            // Deliberately imposed rather than inherited. Everything else the
+            // interface shows is read back from the engine, but a harness whose
+            // default is worse than the best it knows about is not a useful
+            // starting point.
+            ApplyOcclusionModeIndex(gBestMeasuredOcclusionModeIndex);
+        }
     }
 
     if (bmIsEngineGUIAvaliable == true)

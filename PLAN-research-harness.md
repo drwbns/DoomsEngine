@@ -478,6 +478,34 @@ visible objects, the Hi-Z grid sweep taking waste from 60% to 49%, the hull
 halving what the box leaves. The ones about *cost* do not stand, and the
 per draw figures in particular are roughly three times too large.
 
+## What the engine now starts with
+
+The settings that won, verified together rather than only one at a time, on one
+frozen frame of a dense view:
+
+| | drawn | binds | triangles | geometry | fps |
+| --- | --- | --- | --- | --- | --- |
+| what it used to boot with | 3548 | 1327 | 7.21 M | 4.478 ms | 209 |
+| what it boots with now | 3053 | 17 | 4.00 M | 2.686 ms | 339 |
+
+40% off the geometry pass and 62% more frames. They stack: Hi-Z and the hull
+occludee cull 495 more objects between them, level of detail takes 45% of the
+triangles off what remains, and grouping by state collapses 1327 mesh binds to
+17.
+
+On by default: level of detail, the convex hull occludee, grouping by state,
+skipping unmoved objects, skipping redundant mesh binds, a 256 cell Hi-Z grid,
+and the frustum plus Hi-Z culling mode.
+
+Off by default, each because it was measured and lost: the depth pre pass, the
+polygon outline, and BVH frustum culling.
+
+The culling mode is the one thing here imposed rather than read back. config.ini
+boots into frustum plus software occlusion, and everything else the interface
+shows is whatever the engine actually has, deliberately. A harness that starts
+worse than the best it knows about is not a useful starting point, so this one
+setting is applied over the file.
+
 ## Next
 
 1. **Re-measure the Hi-Z grid sweep in Release.** The last of the Debug

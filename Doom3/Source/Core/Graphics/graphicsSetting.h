@@ -103,7 +103,10 @@ namespace dooms
 			// default: it collapses redundant binds, and it gives up the depth
 			// rejection that front to back ordering buys. Measured, the two can
 			// be compared instead of argued about.
-			extern inline bool IsGroupDrawsByStateEnabled{ false };
+			// On by default: measured in Release at 2.71 ms down to 2.58 ms, 339
+			// to 355 fps. It gives up front to back ordering, which was the
+			// larger cost in Debug and is the smaller one here.
+			extern inline bool IsGroupDrawsByStateEnabled{ true };
 
 			// Skip rebinding a mesh that is already bound. Does almost nothing
 			// in front to back order and a great deal in grouped order.
@@ -165,7 +168,10 @@ namespace dooms
 			// gives the true nearest depth rather than a box corner sticking out
 			// in front of the object, and a screen rectangle that follows the
 			// mesh rather than the box around it.
-			extern inline bool IsHiZHullOccludeeEnabled{ false };
+			// On by default: measured in Release at 2.04 ms down to 1.72 ms and
+			// 275 more objects culled, 440 to 511 fps. It was off because in a
+			// Debug build the same code cost 5.7 ms of cpu to save 0.8 ms.
+			extern inline bool IsHiZHullOccludeeEnabled{ true };
 			extern inline unsigned int CullStatHullMeshCount{ 0 };
 			extern inline unsigned int CullStatHullVertexCount{ 0 };
 
@@ -221,7 +227,9 @@ namespace dooms
 			// The measured ceiling for this is at least 4.8 ms on a frame where
 			// the geometry pass costs 15.7 ms, and it costs almost nothing per
 			// object because the projected size it needs is already computed.
-			extern inline bool IsMeshLodEnabled{ false };
+			// On by default: measured in Release at 2.99 ms down to 1.98 ms on the
+			// geometry pass, 337 to 447 fps.
+			extern inline bool IsMeshLodEnabled{ true };
 			extern inline float MeshLodTrianglesPerPixel{ 1.0f };
 			extern inline unsigned int MeshLodMeshCount{ 0 };
 			extern inline unsigned int MeshLodLevelCount{ 0 };
