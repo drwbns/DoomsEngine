@@ -223,6 +223,9 @@ namespace dooms
 				double mDrawnRendererCount{ 0.0 };
 				double mFalseCullCount{ 0.0 };
 				double mFalseCullTestedCount{ 0.0 };
+				double mFalseCullPixelCount{ 0.0 };
+				double mDrawnPixelCount{ 0.0 };
+				unsigned long long mWorstFalseCullPixelCount{ 0 };
 				double mOracleInvisibleCount{ 0.0 };
 				double mOracleTestedCount{ 0.0 };
 				double mHiZTestMilliseconds{ 0.0 };

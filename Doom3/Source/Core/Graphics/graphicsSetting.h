@@ -153,6 +153,26 @@ namespace dooms
 			extern inline unsigned int CullStatOracleFalseCullTestedCount{ 0 };
 			extern inline unsigned int CullStatOracleFalseCullCount{ 0 };
 
+			// How much of the image those wrong culls actually cost.
+			//
+			// The count above treats a three pixel sliver at a screen edge and
+			// a missing boulder identically, because it only asks whether an
+			// object would have drawn anything at all. The occlusion query
+			// already answers with how many samples passed, so keeping that
+			// number is free and is the difference between a defect worth
+			// stopping for and one nobody could see.
+			//
+			// The worst single object matters separately from the total: forty
+			// slivers and one hole in a wall add up the same way and are not
+			// the same bug. The drawn total is here as the scale to read them
+			// against -- a number of pixels means nothing until it is beside
+			// the number the frame drew.
+			//
+			// Samples rather than pixels if multisampling is ever switched on.
+			extern inline unsigned long long CullStatOracleFalseCullPixelCount{ 0 };
+			extern inline unsigned long long CullStatOracleWorstFalseCullPixelCount{ 0 };
+			extern inline unsigned long long CullStatOracleDrawnPixelCount{ 0 };
+
 			// How many cells across the Hi-Z test reads back.
 			//
 			// This decides how coarse the occlusion test is, and it matters

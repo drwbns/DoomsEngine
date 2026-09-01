@@ -587,6 +587,14 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 		mHiZMarginSweepAccumulator.mOracleTestedCount += graphicsSetting::CullStatOracleTestedCount;
 		mHiZMarginSweepAccumulator.mHiZTestMilliseconds += graphicsSetting::CpuStatHiZTestMilliseconds;
 		mHiZMarginSweepAccumulator.mGeometryPassMilliseconds += graphicsSetting::GpuStatGeometryPassMilliseconds;
+		mHiZMarginSweepAccumulator.mFalseCullPixelCount += static_cast<double>(graphicsSetting::CullStatOracleFalseCullPixelCount);
+		mHiZMarginSweepAccumulator.mDrawnPixelCount += static_cast<double>(graphicsSetting::CullStatOracleDrawnPixelCount);
+
+		// The worst across the whole step, not an average of worsts: one hole
+		// in a wall is the thing worth knowing about, and averaging hides it.
+		mHiZMarginSweepAccumulator.mWorstFalseCullPixelCount = math::Max(
+			mHiZMarginSweepAccumulator.mWorstFalseCullPixelCount,
+			graphicsSetting::CullStatOracleWorstFalseCullPixelCount);
 	}
 
 	if (sweepResult.bmIsStepComplete == true)
@@ -600,7 +608,8 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 		{
 			if (sweepResult.mCompletedStep == 0)
 			{
-				sweepFile << "margin,grid,drawn,false_culls,false_cull_tested,wasted,oracle_tested,hiz_cpu_ms,geometry_gpu_ms\n";
+				sweepFile << "margin,grid,drawn,false_culls,false_cull_tested,wasted,oracle_tested,hiz_cpu_ms,geometry_gpu_ms,"
+					"false_cull_px,worst_false_cull_px,drawn_px\n";
 			}
 
 			sweepFile << measuredMargin << ','
@@ -611,14 +620,19 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 				<< (mHiZMarginSweepAccumulator.mOracleInvisibleCount / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mOracleTestedCount / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mHiZTestMilliseconds / frameCount) << ','
-				<< (mHiZMarginSweepAccumulator.mGeometryPassMilliseconds / frameCount) << '\n';
+				<< (mHiZMarginSweepAccumulator.mGeometryPassMilliseconds / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mFalseCullPixelCount / frameCount) << ','
+				<< mHiZMarginSweepAccumulator.mWorstFalseCullPixelCount << ','
+				<< (mHiZMarginSweepAccumulator.mDrawnPixelCount / frameCount) << '\n';
 		}
 
 		D_RELEASE_LOG(eLogType::D_LOG,
-			"Hi-Z margin sweep : margin %u -> drawn %.1f, false culls %.2f of %.1f, hi-z %.3f ms",
+			"Hi-Z margin sweep : margin %u -> drawn %.1f, false culls %.2f (%.0f px, worst %llu) of %.1f, hi-z %.3f ms",
 			measuredMargin,
 			mHiZMarginSweepAccumulator.mDrawnRendererCount / frameCount,
 			mHiZMarginSweepAccumulator.mFalseCullCount / frameCount,
+			mHiZMarginSweepAccumulator.mFalseCullPixelCount / frameCount,
+			mHiZMarginSweepAccumulator.mWorstFalseCullPixelCount,
 			mHiZMarginSweepAccumulator.mFalseCullTestedCount / frameCount,
 			mHiZMarginSweepAccumulator.mHiZTestMilliseconds / frameCount);
 
@@ -702,6 +716,9 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 		UINT32 invisibleCount = 0;
 		UINT32 falseCullResolvedCount = 0;
 		UINT32 falseCullCount = 0;
+		unsigned long long drawnPixelCount = 0;
+		unsigned long long falseCullPixelCount = 0;
+		unsigned long long worstFalseCullPixelCount = 0;
 
 		for (UINT32 queryIndex = 0; queryIndex < mVisibilityOraclePendingCount; queryIndex++)
 		{
@@ -716,6 +733,7 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 				if (queryIndex < mVisibilityOracleFalseCullStartIndex)
 				{
 					resolvedCount++;
+					drawnPixelCount += passedSampleCount;
 
 					if (passedSampleCount == 0)
 					{
@@ -731,6 +749,10 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 					if (passedSampleCount > 0)
 					{
 						falseCullCount++;
+						falseCullPixelCount += passedSampleCount;
+
+						worstFalseCullPixelCount =
+							(passedSampleCount > worstFalseCullPixelCount) ? passedSampleCount : worstFalseCullPixelCount;
 					}
 				}
 			}
@@ -744,6 +766,9 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 			graphicsSetting::CullStatOracleInvisibleCount = invisibleCount;
 			graphicsSetting::CullStatOracleFalseCullTestedCount = falseCullResolvedCount;
 			graphicsSetting::CullStatOracleFalseCullCount = falseCullCount;
+			graphicsSetting::CullStatOracleFalseCullPixelCount = falseCullPixelCount;
+			graphicsSetting::CullStatOracleWorstFalseCullPixelCount = worstFalseCullPixelCount;
+			graphicsSetting::CullStatOracleDrawnPixelCount = drawnPixelCount;
 		}
 
 		mVisibilityOraclePendingCount = 0;
@@ -756,6 +781,9 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 		graphicsSetting::CullStatOracleInvisibleCount = 0;
 		graphicsSetting::CullStatOracleFalseCullTestedCount = 0;
 		graphicsSetting::CullStatOracleFalseCullCount = 0;
+		graphicsSetting::CullStatOracleFalseCullPixelCount = 0;
+		graphicsSetting::CullStatOracleWorstFalseCullPixelCount = 0;
+		graphicsSetting::CullStatOracleDrawnPixelCount = 0;
 		return;
 	}
 

@@ -187,6 +187,22 @@ void dooms::ui::DrawCallCounterGUI::Render()
 				(falseCullCount > 0) ? ImVec4(1.0f, 0.4f, 0.4f, 1.0f) : ImVec4(0.6f, 1.0f, 0.6f, 1.0f),
 				"False culls: %u of %u culled",
 				falseCullCount, falseCullTestedCount);
+
+			// What those culls cost the image. The count alone cannot tell a
+			// sliver at a screen edge from a hole in a wall, and the two want
+			// very different reactions.
+			if (falseCullCount > 0)
+			{
+				const unsigned long long lostPixels = dooms::graphics::graphicsSetting::CullStatOracleFalseCullPixelCount;
+				const unsigned long long drawnPixels = dooms::graphics::graphicsSetting::CullStatOracleDrawnPixelCount;
+
+				ImGui::TextColored(
+					ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+					"  lost px  : %llu (%.3f%% of drawn), worst %llu",
+					lostPixels,
+					(drawnPixels > 0) ? (100.0 * static_cast<double>(lostPixels) / static_cast<double>(drawnPixels)) : 0.0,
+					dooms::graphics::graphicsSetting::CullStatOracleWorstFalseCullPixelCount);
+			}
 		}
 
 		// The two passes that touch pixels. Shown together because a depth

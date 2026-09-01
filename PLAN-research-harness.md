@@ -592,7 +592,29 @@ Ordered by what would change a decision, not by size.
    | 2      | 777.9 | 14.9        | 280.4  | 0.838    | 1.513        |
 
    So the shipped default wrongly culls around 23 objects every frame while the
-   camera turns. Those are holes in the image, and nothing was counting them.
+   camera turns, and nothing was counting them.
+
+   **How much that costs the image, measured after the fact: almost nothing.**
+   The count above treats a sliver at a screen edge and a hole in a wall
+   identically, so the query's sample count is now kept too:
+
+   | margin | false culls | pixels lost | worst single | drawn pixels |
+   |--------|-------------|-------------|--------------|--------------|
+   | 0      | 38.0        | 2331        | 694          | 1,643,480    |
+   | 1      | 23.0        | 1440        | 650          | 1,644,770    |
+   | 2      | 14.9        | 904         | 657          | 1,645,700    |
+
+   At the shipped default that is 1440 pixels out of 1.64 million drawn, 0.09%,
+   averaging 63 pixels an object; the worst single object across sixty frames
+   covered 650, about 25 by 25. These are distant specks and edge slivers, not
+   holes. The earlier description of them as holes in the image was wrong, and
+   was written before anything measured severity.
+
+   Which resets the conclusion. The margin prevents an error that is real and
+   almost invisible, and costs about 70 objects of cull rate to do it -- objects
+   small enough that the geometry pass does not measurably notice: 1.407, 1.387
+   and 1.488 ms across the three margins is noise. Both sides of this trade are
+   small, so leaving the margin at 1 is defensible and so is 2.
    Raising the margin helps and does not converge -- it buys roughly a third
    fewer errors per step while costing about 5% of the objects drawn and 8% of
    the Hi-Z cpu time -- because the error is stale *data*, not a footprint that
@@ -641,9 +663,27 @@ Ordered by what would change a decision, not by size.
    That leaves the real fix needing a same frame depth buffer to test against,
    and the two ways to get one are a synchronous readback -- a full stall every
    frame, the cost this design exists to avoid -- or testing on the gpu, which
-   is item 5 and is blocked on compute dispatch, unordered access views and
-   indirect draw. **Item 5 is therefore a prerequisite for item 2, not an
-   alternative to it.**
+   is item 5. So item 5 is a prerequisite for this item rather than an
+   alternative to it.
+
+   **But on this evidence neither is urgent.** The staleness costs 0.09% of the
+   drawn pixels and a cull rate difference the geometry pass cannot be measured
+   to care about. Two phase occlusion culling is back to being an optimisation
+   with a small payoff on this scene, not a correctness fix, and it should be
+   ordered against instancing and the rest on that basis. Worth revisiting if a
+   scene ever turns up where the same measurement reads differently -- faster
+   camera motion, moving occluders, or objects large enough on screen that one
+   wrong cull is a hole rather than a speck.
+
+   A note on what item 5 is actually blocked on, since the note that it wants
+   D3D12 or Vulkan is only half right. The DX11 backend already creates and
+   binds compute shaders (`CreateComputeShader`, `CSSetShader`,
+   `CSSetShaderResources`). What it has no entry point for is `Dispatch`,
+   unordered access views, and `DrawIndexedInstancedIndirect` -- all three of
+   which D3D11 itself supports. So the gpu side test is blocked on three
+   functions in the graphics dll rather than on an api port. The fully gpu
+   driven form, where the gpu builds its own draw list at scale, is the part
+   that wants a newer api.
 
 ### Measurement debt
 
