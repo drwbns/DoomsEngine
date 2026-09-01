@@ -609,13 +609,41 @@ Ordered by what would change a decision, not by size.
    6.47 and 3.02 false culls for the three margins: it fires, and it falls with
    margin, which is what a staleness margin should do.
 
-   Before the full two-phase build, one cheaper thing is worth testing: the
-   test currently compares an object's *current* screen rectangle against depth
-   from an *older* camera, which is a straight misalignment. Storing the view
-   projection matrix the readback was built with, and projecting bounds through
-   that instead, would make the test self consistent and should remove the part
-   of the error that is not true disocclusion. The hull path already projects
-   its own vertices, so it is nearly a one line experiment there.
+   The cheaper thing was tried first, and did not work. The test compares an
+   object's *current* screen rectangle against depth from an *older* camera,
+   which is a straight misalignment, so the readback now carries the view
+   projection matrix that built it and the hull path can project through that
+   instead (`IsHiZReprojectionEnabled`, off). Objects reaching outside the
+   older frame are left alone, since the part that was off screen has no depth
+   to be judged by.
+
+   It cuts false culls by about a third at every margin -- and draws more while
+   doing it. Compared at matched points it is not better than widening the
+   margin:
+
+   | configuration        | false culls | drawn |
+   |----------------------|-------------|-------|
+   | margin 1, as shipped | 22.9        | 742.5 |
+   | margin 0, reprojected| 24.0        | 761.5 |
+   | margin 2, as shipped | 14.9        | 777.9 |
+   | margin 1, reprojected| 15.3        | 782.3 |
+
+   So misalignment was not the dominant error. Both knobs buy error reduction
+   at the same exchange rate and neither reaches zero, which says the residue
+   is genuine disocclusion: things that were hidden when the depth was captured
+   and are not hidden now. No amount of widening or realigning a test against
+   old depth can see those. Only depth from this frame can, which is what two
+   phase occlusion culling is.
+
+   One sweep per configuration, so the small differences in that table are not
+   separable from run to run noise; the shape of the result is what matters.
+
+   That leaves the real fix needing a same frame depth buffer to test against,
+   and the two ways to get one are a synchronous readback -- a full stall every
+   frame, the cost this design exists to avoid -- or testing on the gpu, which
+   is item 5 and is blocked on compute dispatch, unordered access views and
+   indirect draw. **Item 5 is therefore a prerequisite for item 2, not an
+   alternative to it.**
 
 ### Measurement debt
 

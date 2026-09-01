@@ -277,7 +277,16 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 		return;
 	}
 
-	const math::Matrix4x4 viewProjectionMatrix = targetCamera->GetViewProjectionMatrix();
+	// The camera that produced the depth being tested against, rather than the
+	// one the frame is being drawn from. See
+	// graphicsSetting::IsHiZReprojectionEnabled: comparing a current screen
+	// rectangle against older depth looks objects up in cells they were not in.
+	const bool bIsReprojecting =
+		(graphicsSetting::IsHiZReprojectionEnabled == true) && (bmIsHiZReadbackViewProjectionValid == true);
+
+	const math::Matrix4x4 viewProjectionMatrix = bIsReprojecting
+		? mHiZReadbackViewProjection
+		: targetCamera->GetViewProjectionMatrix();
 
 	const std::vector<Renderer*>& renderers = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
 
@@ -388,6 +397,17 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 		}
 
 		if (bIsTestable == false)
+		{
+			continue;
+		}
+
+		// Reprojected objects that reach outside the frame the depth came from
+		// cannot be judged by it: the part that was off screen has no depth at
+		// all, and clamping would test it against whatever sits at the edge.
+		// That is exactly where newly revealed geometry appears when the camera
+		// turns, so it would trade one error for another.
+		if (bIsReprojecting == true &&
+			(minU < 0.0f || maxU > 1.0f || minV < 0.0f || maxV > 1.0f))
 		{
 			continue;
 		}
@@ -1082,10 +1102,10 @@ void dooms::graphics::DeferredRenderingPipeLine::BuildHiZPyramid(dooms::Camera* 
 
 	EndGpuTimer(mHiZGpuTimer);
 
-	ReadBackHiZLevel();
+	ReadBackHiZLevel(targetCamera->GetViewProjectionMatrix());
 }
 
-void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
+void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel(const math::Matrix4x4& pyramidViewProjection)
 {
 	if (GraphicsAPI::CreateStagingTexture2D == nullptr ||
 		GraphicsAPI::CopyTexture2DToStagingTexture == nullptr ||
@@ -1181,6 +1201,11 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 
 			bmIsHiZReadbackDataValid = true;
 
+			// The data just mapped came from the copy issued earlier, so it
+			// belongs to the camera recorded at that point, not to this one.
+			mHiZReadbackViewProjection = mHiZPendingReadbackViewProjection;
+			bmIsHiZReadbackViewProjectionValid = true;
+
 			GraphicsAPI::UnMapTexture2D(mHiZReadbackTexture);
 			bmIsHiZReadbackPending = false;
 
@@ -1200,6 +1225,9 @@ void dooms::graphics::DeferredRenderingPipeLine::ReadBackHiZLevel()
 			mHiZReadbackTexture,
 			mHiZTexture->GetTextureResourceObject(),
 			mHiZReadbackLevel);
+
+		// Travels with the copy, to be adopted when this one is mapped.
+		mHiZPendingReadbackViewProjection = pyramidViewProjection;
 
 		bmIsHiZReadbackPending = true;
 	}

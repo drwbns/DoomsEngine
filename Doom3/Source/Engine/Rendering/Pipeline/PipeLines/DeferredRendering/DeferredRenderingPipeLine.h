@@ -6,6 +6,7 @@
 #include "DeferredRenderingDrawer.h"
 #include <Rendering/Measurement/SweepController.h>
 #include <Quaternion.h>
+#include <Matrix4x4.h>
 
 #include "DeferredRenderingPipeLine.reflection.h"
 namespace dooms
@@ -95,7 +96,7 @@ namespace dooms
 			/// <summary>
 			/// Takes last frame's copy if it has arrived, and queues this frame's.
 			/// </summary>
-			void ReadBackHiZLevel();
+			void ReadBackHiZLevel(const math::Matrix4x4& pyramidViewProjection);
 
 			/// <summary>
 			/// Reports what a Hi-Z occlusion test would decide, without acting on
@@ -250,6 +251,19 @@ namespace dooms
 			/// </summary>
 			math::Quaternion mHiZMarginSweepBaseRotation{ math::Vector3(0.0f, 0.0f, 0.0f) };
 			unsigned int mHiZMarginSweepFrameInStep{ 0 };
+
+			/// <summary>
+			/// The camera that built the depth currently read back, and the one
+			/// that built the copy still in flight.
+			///
+			/// Two of them because the copy issued this frame is not the data
+			/// mapped this frame: the map consumes the copy issued earlier, so
+			/// the matrix has to travel with it rather than being read when it
+			/// lands.
+			/// </summary>
+			math::Matrix4x4 mHiZReadbackViewProjection{ 1.0f };
+			math::Matrix4x4 mHiZPendingReadbackViewProjection{ 1.0f };
+			bool bmIsHiZReadbackViewProjectionValid{ false };
 
 			/// <summary>
 			/// Advances the margin sweep by one frame. Does nothing unless a

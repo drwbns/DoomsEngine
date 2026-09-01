@@ -197,6 +197,42 @@ namespace dooms
 			// worth building to remove the staleness properly.
 			extern inline unsigned int HiZStalenessMarginCells{ 1 };
 
+			// Test occludees against the camera the read back depth was built
+			// with, rather than against where the camera is now.
+			//
+			// The depth is at least a frame old, so comparing an object's
+			// current screen rectangle against it compares two different
+			// moments: when the camera turns, an object is looked up in cells
+			// belonging to a part of the screen it was not in. That is a plain
+			// misalignment, and it is separable from the real problem, which is
+			// that an object may genuinely have been disoccluded since.
+			//
+			// Projecting through the stored matrix makes the test self
+			// consistent -- it answers "was this occluded, in the frame this
+			// depth came from" -- and leaves only the disocclusion error, which
+			// is what two phase occlusion culling exists to fix. Only the hull
+			// path honours this; the box path reads screen bounds PreCulling
+			// computed with the current matrix and would have to reproject them
+			// itself.
+			//
+			// Off, because measuring it did not support the idea it was built
+			// on. It does cut false culls by about a third at every margin, but
+			// it draws more at the same time, and compared at matched points it
+			// is no better than simply widening the margin:
+			//
+			//   margin 1, as shipped     22.9 false culls, 742.5 drawn
+			//   margin 0, reprojected    24.0 false culls, 761.5 drawn
+			//   margin 2, as shipped     14.9 false culls, 777.9 drawn
+			//   margin 1, reprojected    15.3 false culls, 782.3 drawn
+			//
+			// So misalignment was not the dominant error after all: both knobs
+			// buy the same thing at the same rate, and neither reaches zero.
+			// That is the argument for two phase occlusion culling rather than
+			// for either of them. Kept, off, because it is the honest control
+			// for that claim, and one sweep each is not enough to call the
+			// small differences above real.
+			extern inline bool IsHiZReprojectionEnabled{ false };
+
 			// Set to start an automatic sweep of the margin, which holds each
 			// value long enough to settle, averages what it sees, and writes a
 			// row per value to hiz_margin_sweep.csv beside the executable.
