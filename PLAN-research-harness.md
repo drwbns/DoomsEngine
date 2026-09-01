@@ -456,9 +456,14 @@ change, and the Debug column is what this document said before.
 | group draws by state | 14.21 to 16.11 ms, a loss | **2.706 to 2.575 ms, 339 to 355 fps** |
 | convex hull occludee | 5.7 ms cpu to save 0.8 ms | **2.042 to 1.724 ms, 440 to 511 fps** |
 | depth pre pass | a loss | still a loss, 339 to 251 fps |
+| hull outline as polygon | 30.5 ms cpu, a loss | still a loss, 533 to 371 fps |
 
-Three of four inverted. The one that did not is the pre pass, which doubles
-geometry submission and is expensive under any build.
+Three of five inverted. The two that did not are the pre pass, which doubles
+geometry submission, and the polygon outline, whose scanline rescans every edge
+for every row it covers. Release makes the polygon three times cheaper, 30.5 ms
+to 1.9 ms, and it is still more than the whole geometry pass it is trying to
+shorten. Both lose for reasons that are structural rather than a matter of
+constant factors, which is why the build did not rescue them.
 
 Fitting the level of detail pair: geometry is about **0.15 us per draw plus
 0.56 ms per million triangles**, so on a 4.2 ms pass triangles account for 3.7
@@ -475,13 +480,9 @@ per draw figures in particular are roughly three times too large.
 
 ## Next
 
-1. **Put level zero in the shared vertex buffer** so a mesh never rebinds
-   between full detail and a coarse level. Binds are 676 without detail levels
-   and 1258 with, entirely from alternating between the two buffers.
-2. **Re-measure the Hi-Z grid sweep and the polygon silhouette in Release.**
-   Both were judged in Debug and both are cpu heavy, which is exactly the class
-   that inverted.
-3. **Tests around the culling math**, still the only item on this list with no
+1. **Re-measure the Hi-Z grid sweep in Release.** The last of the Debug
+   measurements that has not been retried.
+2. **Tests around the culling math**, still the only item on this list with no
    measurements behind it at all.
 4. **Instancing**, now worth about half a millisecond rather than ten, and
    therefore behind everything above it.

@@ -143,6 +143,24 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 
 		std::vector<PreparedLevel> preparedLevels;
 
+		// Level zero is full detail, and it lives in the shared buffer with the
+		// rest. It costs a duplicate of the mesh's vertices and it is what stops
+		// a mesh rebinding every time an object switches between full detail and
+		// a coarse level: with full detail on the mesh's own buffer instead,
+		// that alternation took binds from 676 to 1258.
+		{
+			PreparedLevel fullDetail;
+			fullDetail.mIndices = modelMesh->mMeshIndices;
+
+			fullDetail.mOriginalVertexIndices.resize(static_cast<size_t>(modelMesh->mMeshDatas.mVerticeCount));
+			for (size_t vertexIndex = 0; vertexIndex < fullDetail.mOriginalVertexIndices.size(); vertexIndex++)
+			{
+				fullDetail.mOriginalVertexIndices[vertexIndex] = static_cast<UINT32>(vertexIndex);
+			}
+
+			preparedLevels.push_back(std::move(fullDetail));
+		}
+
 		// Roughly a quarter of the triangles at each step, which is about one
 		// level per halving of the object's size on screen.
 		const unsigned int gridResolutions[3] = { 24, 12, 6 };
@@ -194,7 +212,7 @@ const dooms::graphics::MeshLodChain& dooms::graphics::GetMeshLodChain(const Mesh
 			preparedLevels.push_back(std::move(prepared));
 		}
 
-		if (preparedLevels.empty() == false)
+		if (preparedLevels.size() > 1)
 		{
 			size_t totalVertexCount = 0;
 			for (const PreparedLevel& prepared : preparedLevels)
@@ -332,8 +350,8 @@ const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* 
 		static_cast<unsigned long long>((affordableTriangleCount > 0.0f) ? (affordableTriangleCount * 3.0f) : 0.0f);
 
 	// Coarsest first, so the answer is the cheapest level that still has enough
-	// triangles to be worth having. Falling off the end means even the finest
-	// simplified level is too coarse, and the mesh itself should be drawn.
+	// triangles to be worth having. Level zero is full detail and always
+	// qualifies, so this cannot fall off the end.
 	for (size_t levelIndex = chain.mLevels.size(); levelIndex-- > 0; )
 	{
 		if (chain.mLevels[levelIndex].mIndexCount >= affordableIndexCount)
@@ -342,7 +360,7 @@ const dooms::graphics::MeshLodLevel* dooms::graphics::SelectMeshLod(const Mesh* 
 		}
 	}
 
-	return nullptr;
+	return &chain.mLevels[0];
 }
 
 void dooms::graphics::GetMeshLodStatistics(unsigned int& outMeshCount, unsigned int& outLevelCount)

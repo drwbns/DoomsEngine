@@ -1173,6 +1173,19 @@ void dooms::ui::EngineGUIServer::Update()
             dooms::graphics::graphicsSetting::IsSkipPerDrawUboWriteEnabled ? "SKIPPED (probe)" : "On");
     }
 
+    // X rasterises the projected hull as a polygon rather than testing the
+    // rectangle around it. Measured as a heavy loss in Debug and switched off;
+    // it is cpu bound, which is the class of technique Release inverted.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_X))
+    {
+        dooms::graphics::graphicsSetting::IsHiZHullPolygonEnabled =
+            !dooms::graphics::graphicsSetting::IsHiZHullPolygonEnabled;
+
+        ShowNotification("Occludee outline: %s",
+            dooms::graphics::graphicsSetting::IsHiZHullPolygonEnabled ? "Polygon" : "Rectangle");
+    }
+
     // F4 puts the panels back into the default arrangement.
     if (dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_F4))
     {
