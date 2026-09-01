@@ -590,6 +590,13 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 		mHiZMarginSweepAccumulator.mFalseCullPixelCount += static_cast<double>(graphicsSetting::CullStatOracleFalseCullPixelCount);
 		mHiZMarginSweepAccumulator.mDrawnPixelCount += static_cast<double>(graphicsSetting::CullStatOracleDrawnPixelCount);
 
+		// Not about the margin at all: the ratio of draws to draw groups is the
+		// ceiling on what instancing could collapse, and it is free to carry
+		// here rather than reading it off a panel later.
+		mHiZMarginSweepAccumulator.mDrawGroupCount += graphicsSetting::CullStatDrawGroupCount;
+		mHiZMarginSweepAccumulator.mMeshBindCount += graphicsSetting::CullStatMeshBindCount;
+		mHiZMarginSweepAccumulator.mIndexCount += static_cast<double>(graphicsSetting::CullStatIndexCount);
+
 		// The worst across the whole step, not an average of worsts: one hole
 		// in a wall is the thing worth knowing about, and averaging hides it.
 		mHiZMarginSweepAccumulator.mWorstFalseCullPixelCount = math::Max(
@@ -609,7 +616,7 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 			if (sweepResult.mCompletedStep == 0)
 			{
 				sweepFile << "margin,grid,drawn,false_culls,false_cull_tested,wasted,oracle_tested,hiz_cpu_ms,geometry_gpu_ms,"
-					"false_cull_px,worst_false_cull_px,drawn_px\n";
+					"false_cull_px,worst_false_cull_px,drawn_px,draw_groups,mesh_binds,index_count\n";
 			}
 
 			sweepFile << measuredMargin << ','
@@ -623,7 +630,10 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 				<< (mHiZMarginSweepAccumulator.mGeometryPassMilliseconds / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mFalseCullPixelCount / frameCount) << ','
 				<< mHiZMarginSweepAccumulator.mWorstFalseCullPixelCount << ','
-				<< (mHiZMarginSweepAccumulator.mDrawnPixelCount / frameCount) << '\n';
+				<< (mHiZMarginSweepAccumulator.mDrawnPixelCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mDrawGroupCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mMeshBindCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mIndexCount / frameCount) << '\n';
 		}
 
 		D_RELEASE_LOG(eLogType::D_LOG,

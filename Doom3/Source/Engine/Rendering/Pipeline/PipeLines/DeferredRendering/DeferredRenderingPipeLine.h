@@ -226,6 +226,9 @@ namespace dooms
 				double mFalseCullPixelCount{ 0.0 };
 				double mDrawnPixelCount{ 0.0 };
 				unsigned long long mWorstFalseCullPixelCount{ 0 };
+				double mDrawGroupCount{ 0.0 };
+				double mMeshBindCount{ 0.0 };
+				double mIndexCount{ 0.0 };
 				double mOracleInvisibleCount{ 0.0 };
 				double mOracleTestedCount{ 0.0 };
 				double mHiZTestMilliseconds{ 0.0 };
