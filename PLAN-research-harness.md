@@ -693,9 +693,43 @@ Ordered by what would change a decision, not by size.
 
 ### Performance, in measured order
 
-4. **Instancing**, worth about half a millisecond by the Release fit, so it
-   sits below everything above it despite being the thing that looked like the
-   biggest prize for most of a session.
+4. **Instancing.** Started, not landed. The work is on a git stash rather than
+   in a commit, because the engine crashes with it applied and the cause is not
+   yet known.
+
+   The ceiling is no longer a fit. At the shipped margin the geometry pass
+   issues 742.6 draws across 51 distinct mesh and material pairs, a 14.6x
+   collapse, with mesh binds already down at 15.7 -- so what is left to win is
+   the submission and its per draw constant buffer write, not the binding.
+
+   What is built and believed good:
+
+   - `DrawIndexedInstanced` in the D3D11 backend and a matching OpenGL entry,
+     threaded through the function pointer table. Verified exported unmangled,
+     so `GetProcAddress` resolves it.
+   - `Mesh::DrawInstanced` and `DrawInstancedWithLodBuffers`. Detail level has
+     to be part of what defines a run, since one draw carries one index buffer;
+     without that instancing would silently draw everything at full detail and
+     then look faster than what it is compared against.
+   - A per instance matrix buffer filled once per pass and drawn from in runs.
+   - The per instance input layout. This was the risk and it is retired:
+     `glslcc` emits four `vec4` inputs at locations 5 to 8 as TEXCOORD3 to 6 of
+     type float4, and D3D11 accepts a layout that puts all four on one slot as
+     `PER_INSTANCE` with step rate 1. Traced and confirmed accepted.
+
+   What is not solved: with the whole thing applied the engine dies during
+   startup, after every input layout has reported success. Reverting only the
+   shader did not fix it, and short circuiting only the draw path did not fix
+   it, so it is neither of those alone. Two real bugs were found while looking
+   and are worth keeping regardless: `CreateInputLayoutForD3D` returned a
+   failed `HRESULT` as though it were a layout handle, which survives every
+   null check and faults far from its cause; and `UpdateDataToBuffer` writes
+   through `UpdateSubresource`, which D3D11 forbids on a dynamic buffer and
+   which writes the whole resource, so any caller passing a partially filled
+   source reads past the end of it.
+
+   Next attempt should start under the D3D11 debug layer or a debugger rather
+   than by bisecting a fifty second startup, which is what made this expensive.
 
 5. **Move the Hi-Z test onto the gpu.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
