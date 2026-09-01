@@ -508,12 +508,61 @@ setting is applied over the file.
 
 ## Next
 
-1. **Re-measure the Hi-Z grid sweep in Release.** The last of the Debug
-   measurements that has not been retried.
-2. **Tests around the culling math**, still the only item on this list with no
-   measurements behind it at all.
-4. **Instancing**, now worth about half a millisecond rather than ten, and
-   therefore behind everything above it.
+Ordered by what would change a decision, not by size.
+
+### Correctness
+
+1. **Tests around the culling math.** `unit_tests` still has no source files.
+   This has been on the list since the beginning and is now the most valuable
+   item on it: over one session three technique verdicts inverted and the cost
+   model turned out to be fitting object count while being read as triangle
+   count. Nothing here is checked by anything except a person looking at a
+   screen and the visibility oracle. Minimum worth having: frustum plane
+   extraction against known inside, outside and straddling boxes; the tile
+   alignment and rounding in `SetResolution`; the hull's containment property,
+   which everything conservative depends on; and the level of detail selection
+   boundaries.
+
+2. **Two-phase occlusion culling.** The principled fix for the readback
+   staleness that a one cell margin currently papers over. That margin is also
+   a measured source of conservatism, so this is not only a correctness item.
+
+### Measurement debt
+
+3. **Re-measure the Hi-Z grid sweep in Release.** The last Debug measurement
+   that has not been retried. The 256 cell default was chosen from Debug
+   numbers and the knee may have moved.
+
+4. **Rewrite the older sections of this document.** The headline tables are
+   corrected and the inversions recorded, but Debug era prose survives in
+   places and some of it is now known to be wrong.
+
+### Performance, in measured order
+
+5. **Instancing**, worth about half a millisecond by the Release fit, so it
+   sits below everything above it despite being the thing that looked like the
+   biggest prize for most of a session.
+
+6. **Move the Hi-Z test onto the gpu.** Blocked: needs compute dispatch,
+   unordered access views and indirect draw, none of which the backend has.
+   The fully gpu driven form of this wants D3D12 or Vulkan.
+
+### Build and infrastructure
+
+7. **Make the Release clReflect fix survive a clean checkout.** The engine side
+   is committed, but Release still depends on hand built clscan, clmerge and
+   clexport DLLs copied from `x64/Debug`. A fresh clone copies the stock ones
+   back and Release stops starting. Either commit the fixed DLLs or script the
+   copy as a build step.
+
+8. **`clexport -map` still crashes** on a Debug map file, parsing 2,875
+   character lines into 1,024 byte buffers. Pre-existing clReflect bug, worked
+   around by running clexport without `-map`, which loses function call
+   addresses.
+
+9. **The startup timing instrumentation is permanent.** It writes
+   `startup_timing.txt` on every run. Harmless and useful, but it is debug
+   output living in `GameCore::Init` and should probably be behind a flag.
 
 
 ## Deliberately out of scope
