@@ -478,6 +478,35 @@ visible objects, the Hi-Z grid sweep taking waste from 60% to 49%, the hull
 halving what the box leaves. The ones about *cost* do not stand, and the
 per draw figures in particular are roughly three times too large.
 
+### The Hi-Z grid knee, re-measured in Release
+
+The last Debug-era measurement left standing. One frozen dense frame, 5806
+objects, the grid the only change:
+
+| grid | drawn | hi-z test cpu | geometry gpu | fps |
+| --- | --- | --- | --- | --- |
+| 64 | 3603 | 0.327 ms | 3.062 ms | 299 |
+| 128 | 3336 | 0.540 ms | 2.840 ms | 320 |
+| 256 | 2932 | 0.712 ms | 2.610 ms | 345 |
+| 512 | 2553 | 0.845 ms | 2.446 ms | 360 |
+
+Monotone in every column, and all four rows fit the cost model above to
+within 3%. The knee moved from 256 to 512: Release halves the cpu price of
+the test, so the extra culling a finer grid buys now pays for itself. The
+default follows the measurement. Finer than 512 keeps culling, but the test
+keeps growing while the geometry it saves shrinks.
+
+The first run of this sweep produced the opposite verdict — finer grids
+culling *less* — and it was wrong. The captures were labeled by counting H
+key presses, two presses silently never reached the engine, and the
+mislabeled columns were only consistent with the gate's cell arithmetic
+under exactly one relabeling. The panel now prints the pause state, the
+culling mode and the grid width on every frame, so a capture carries its own
+conditions, and the key script refuses to send anything unless it has
+verified the engine owns the foreground — keystrokes delivered to whatever
+window has focus are a hazard to the rest of the desktop as much as to the
+measurement.
+
 ## What the engine now starts with
 
 The settings that won, verified together rather than only one at a time, on one
@@ -494,8 +523,10 @@ triangles off what remains, and grouping by state collapses 1327 mesh binds to
 17.
 
 On by default: level of detail, the convex hull occludee, grouping by state,
-skipping unmoved objects, skipping redundant mesh binds, a 256 cell Hi-Z grid,
-and the frustum plus Hi-Z culling mode.
+skipping unmoved objects, skipping redundant mesh binds, a 512 cell Hi-Z grid,
+and the frustum plus Hi-Z culling mode. The grid was 256 when this table was
+captured; the sweep above moved it, and strictly in the direction the table
+already points.
 
 Off by default, each because it was measured and lost: the depth pre pass, the
 polygon outline, and BVH frustum culling.
@@ -529,38 +560,34 @@ Ordered by what would change a decision, not by size.
 
 ### Measurement debt
 
-3. **Re-measure the Hi-Z grid sweep in Release.** The last Debug measurement
-   that has not been retried. The 256 cell default was chosen from Debug
-   numbers and the knee may have moved.
-
-4. **Rewrite the older sections of this document.** The headline tables are
+3. **Rewrite the older sections of this document.** The headline tables are
    corrected and the inversions recorded, but Debug era prose survives in
    places and some of it is now known to be wrong.
 
 ### Performance, in measured order
 
-5. **Instancing**, worth about half a millisecond by the Release fit, so it
+4. **Instancing**, worth about half a millisecond by the Release fit, so it
    sits below everything above it despite being the thing that looked like the
    biggest prize for most of a session.
 
-6. **Move the Hi-Z test onto the gpu.** Blocked: needs compute dispatch,
+5. **Move the Hi-Z test onto the gpu.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
    The fully gpu driven form of this wants D3D12 or Vulkan.
 
 ### Build and infrastructure
 
-7. **Make the Release clReflect fix survive a clean checkout.** The engine side
+6. **Make the Release clReflect fix survive a clean checkout.** The engine side
    is committed, but Release still depends on hand built clscan, clmerge and
    clexport DLLs copied from `x64/Debug`. A fresh clone copies the stock ones
    back and Release stops starting. Either commit the fixed DLLs or script the
    copy as a build step.
 
-8. **`clexport -map` still crashes** on a Debug map file, parsing 2,875
+7. **`clexport -map` still crashes** on a Debug map file, parsing 2,875
    character lines into 1,024 byte buffers. Pre-existing clReflect bug, worked
    around by running clexport without `-map`, which loses function call
    addresses.
 
-9. **The startup timing instrumentation is permanent.** It writes
+8. **The startup timing instrumentation is permanent.** It writes
    `startup_timing.txt` on every run. Harmless and useful, but it is debug
    output living in `GameCore::Init` and should probably be behind a flag.
 

@@ -8,6 +8,10 @@
 #include <DObject/DObjectGlobals.h>
 #include <Rendering/Pipeline/GraphicsPipeLine.h>
 #include <Rendering/Pipeline/PipeLines/DefaultGraphcisPipeLine.h>
+#include <Rendering/Culling/EveryCulling/EveryCulling.h>
+#include <Game/GameCore.h>
+
+#include <cstring>
 
 void dooms::ui::DrawCallCounterGUI::Init()
 {
@@ -20,6 +24,69 @@ void dooms::ui::DrawCallCounterGUI::Render()
 	{
 		ImGui::Text("DrawCall : %u", dooms::graphics::GraphicsAPI::GetDrawCall());
 		ImGui::Text("FPS : %f", dooms::graphics::RenderingDebugger::GetSingleton()->GetFPS());
+
+		// What every other number on this panel was measured under. A
+		// screenshot of this overlay is often the only record of a
+		// measurement's conditions, and a key press that never reached the
+		// engine looks identical to one that did unless the state itself is
+		// on screen.
+		ImGui::Text("Scene : %s", dooms::GameCore::bmIsScenePaused ? "Paused" : "Running");
+
+		const dooms::graphics::DefaultGraphcisPipeLine* const statPipeLine
+			= dooms::CastTo<dooms::graphics::DefaultGraphcisPipeLine*>(dooms::graphics::GraphicsPipeLine::GetSingleton());
+
+		if (IsValid(statPipeLine))
+		{
+			const culling::EveryCulling* const cullingSystem
+				= statPipeLine->mRenderingCullingManager.mCullingSystem.get();
+
+			if (cullingSystem != nullptr)
+			{
+				using CullingModuleType = culling::EveryCulling::CullingModuleType;
+
+				// Assembled from the module flags rather than matched against
+				// a mode table, so any combination config.ini can produce
+				// still reads as what it is. Read back live for the same
+				// reason: the interface is not the only thing that decides
+				// what is running.
+				static char cullingModeLabel[96];
+				cullingModeLabel[0] = '\0';
+
+				const bool bIsViewFrustumEnabled
+					= cullingSystem->GetIsCullingModuleEnabled(CullingModuleType::ViewFrustumCulling);
+
+				if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled)
+				{
+					strcpy_s(cullingModeLabel, "BVH");
+				}
+				else if (bIsViewFrustumEnabled)
+				{
+					strcpy_s(cullingModeLabel, "Frustum");
+				}
+
+				if (cullingSystem->GetIsCullingModuleEnabled(CullingModuleType::MaskedSWOcclusionCulling))
+				{
+					strcat_s(cullingModeLabel, "+SW occlusion");
+				}
+
+				if (dooms::graphics::graphicsSetting::IsHiZOcclusionCullingEnabled)
+				{
+					strcat_s(cullingModeLabel, "+Hi-Z");
+				}
+
+				if (cullingSystem->GetIsCullingModuleEnabled(CullingModuleType::DistanceCulling))
+				{
+					strcat_s(cullingModeLabel, "+Distance");
+				}
+
+				if (cullingModeLabel[0] == '\0')
+				{
+					strcpy_s(cullingModeLabel, "None");
+				}
+
+				ImGui::Text("Culling : %s", cullingModeLabel);
+			}
+		}
 
 		// Beside the draw call rather than only on the visualisation panel,
 		// because this is the overlay people actually watch while flying, and
@@ -44,6 +111,12 @@ void dooms::ui::DrawCallCounterGUI::Render()
 		if (dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds > 0.0f)
 		{
 			ImGui::Text("Hi-Z test  : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds);
+
+			// Which grid the cost above was measured on. The H key's toast is
+			// gone before a screenshot lands, and a sweep labeled by press count
+			// is one lost keypress away from comparing the wrong grids against
+			// each other. Which happened.
+			ImGui::Text("Hi-Z grid  : %u wide", dooms::graphics::graphicsSetting::HiZReadbackTargetWidth);
 		}
 
 		// What instancing could collapse the geometry pass to, if it existed.

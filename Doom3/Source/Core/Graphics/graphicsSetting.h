@@ -138,17 +138,30 @@ namespace dooms
 
 			// How many cells across the Hi-Z test reads back.
 			//
-			// This decides how coarse the occlusion test is, and it was picked
-			// out of the air. It matters more than it looks: the pyramid holds
-			// the farthest depth in each cell, so a single background pixel sets
-			// its whole cell to the far plane and nothing behind that cell can
-			// ever be culled. At sixty cells across a 1280 wide screen, one
-			// speck of visible background poisons a 21 by 22 pixel block.
-			// 256 is the knee of the measured curve. Going 64 to 512 culls 697
-			// more objects and takes 3.5 ms off the geometry pass; most of that
-			// arrives by 256, and 512 costs twice the cpu for another tenth of a
-			// frame. The original 64 was a guess and cost about 3 ms.
-			extern inline unsigned int HiZReadbackTargetWidth{ 256 };
+			// This decides how coarse the occlusion test is, and it matters
+			// more than it looks: the pyramid holds the farthest depth in each
+			// cell, so a single background pixel sets its whole cell to the far
+			// plane and nothing behind that cell can ever be culled. At sixty
+			// cells across a 1300 pixel window, one speck of visible background
+			// poisons a 21 by 22 pixel block.
+			//
+			// 512 is the knee of the curve as re-measured in Release on a
+			// frozen dense view (the 256 this default carried for a while came
+			// from a Debug measurement, where the three times pricier cpu test
+			// made every finer grid look bad):
+			//
+			//   grid  drawn  hi-z cpu  geometry  fps
+			//    64    3603    0.327     3.062    299
+			//   128    3336    0.540     2.840    320
+			//   256    2932    0.712     2.610    345
+			//   512    2553    0.845     2.446    360
+			//
+			// Finer still would keep culling, but the cpu test keeps growing
+			// while the geometry it saves shrinks. Measured with the H key and
+			// the grid line on the DrawCall panel; the view is one dense
+			// frozen frame, so re-check when the scene or window size changes
+			// materially.
+			extern inline unsigned int HiZReadbackTargetWidth{ 512 };
 
 			// Two probes for attributing the waste the finest grid still leaves.
 			//
