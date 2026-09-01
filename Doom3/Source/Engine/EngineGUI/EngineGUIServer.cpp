@@ -1118,6 +1118,32 @@ void dooms::ui::EngineGUIServer::Update()
         ShowNotification("Hi-Z test grid: %u wide", targetWidth);
     }
 
+    // I steps the staleness margin, which is the other half of the same
+    // question: the grid decides how coarse a cell is, the margin decides how
+    // many extra of them every object is tested against. Zero is included
+    // deliberately -- it is the unconservative baseline the other values are
+    // paying for, and the false cull line is what says whether they need to.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_I))
+    {
+        unsigned int& marginInCells = dooms::graphics::graphicsSetting::HiZStalenessMarginCells;
+
+        marginInCells = (marginInCells >= 2u) ? 0u : (marginInCells + 1u);
+
+        ShowNotification("Hi-Z staleness margin: %u cells", marginInCells);
+    }
+
+    // T runs the margin sweep unattended: it holds each margin, averages what
+    // it sees and writes the table itself. It turns the oracle on, which is
+    // expensive, and puts the margin back when it is done.
+    if (ImGui::GetIO().WantTextInput == false
+        && dooms::userinput::UserInput_Server::GetKeyDown(eKEY_CODE::KEY_T))
+    {
+        dooms::graphics::graphicsSetting::IsHiZMarginSweepRequested = true;
+
+        ShowNotification("Hi-Z margin sweep: started, hold still");
+    }
+
     // J and K step the two attribution probes, so the cost of the box's area
     // and the cost of its protruding near corner can be separated.
     if (ImGui::GetIO().WantTextInput == false

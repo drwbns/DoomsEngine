@@ -136,6 +136,23 @@ namespace dooms
 			extern inline unsigned int CullStatOracleTestedCount{ 0 };
 			extern inline unsigned int CullStatOracleInvisibleCount{ 0 };
 
+			// The other half of the oracle: what the culler got *wrong*.
+			//
+			// The counts above only look at objects that survived culling, so
+			// they measure conservatism -- drawing what did not need drawing.
+			// They cannot see the opposite error, an object culled that would
+			// have been visible, because a culled object is never drawn and so
+			// never queried. That error is invisible on screen too, until it
+			// is a hole in the world.
+			//
+			// So the objects the Hi-Z tests culled are re-drawn against the
+			// finished depth buffer, in the same way and at the same time. Any
+			// that return samples were culled wrongly. Without this the
+			// staleness margin below cannot be evaluated at all: its whole job
+			// is to prevent an error nothing was counting.
+			extern inline unsigned int CullStatOracleFalseCullTestedCount{ 0 };
+			extern inline unsigned int CullStatOracleFalseCullCount{ 0 };
+
 			// How many cells across the Hi-Z test reads back.
 			//
 			// This decides how coarse the occlusion test is, and it matters
@@ -162,6 +179,35 @@ namespace dooms
 			// frozen frame, so re-check when the scene or window size changes
 			// materially.
 			extern inline unsigned int HiZReadbackTargetWidth{ 512 };
+
+			// How many cells the Hi-Z test widens an object's footprint by,
+			// on every side, to absorb the staleness of the readback.
+			//
+			// The depth read back is at least a frame old and never waited on,
+			// so the object or the camera may have moved since. A wider
+			// footprint can only add cells, which can only raise the farthest
+			// depth found, which can only make the test less willing to cull:
+			// the error goes towards drawing something needlessly rather than
+			// dropping something visible.
+			//
+			// It was a literal 1 at three call sites before it was a setting.
+			// Making it adjustable is what lets its cost be measured against
+			// the false cull count above, rather than assumed -- which is the
+			// prerequisite for deciding whether two phase occlusion culling is
+			// worth building to remove the staleness properly.
+			extern inline unsigned int HiZStalenessMarginCells{ 1 };
+
+			// Set to start an automatic sweep of the margin, which holds each
+			// value long enough to settle, averages what it sees, and writes a
+			// row per value to hiz_margin_sweep.csv beside the executable.
+			//
+			// Cleared by the sweep once it has taken the request. Sweeps used
+			// to be driven by hand -- press the key, read the panel, write it
+			// down -- and that is how a grid table got built from mismatched
+			// settings once already. Averaging over frames also matters more
+			// here than it looks: the false cull count depends on where the
+			// camera is, and a single frame of it says almost nothing.
+			extern inline bool IsHiZMarginSweepRequested{ false };
 
 			// Two probes for attributing the waste the finest grid still leaves.
 			//

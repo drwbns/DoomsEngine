@@ -571,8 +571,51 @@ Ordered by what would change a decision, not by size.
    a test was ever going to find it.
 
 2. **Two-phase occlusion culling.** The principled fix for the readback
-   staleness that a one cell margin currently papers over. That margin is also
-   a measured source of conservatism, so this is not only a correctness item.
+   staleness that a one cell margin currently papers over. **Now measured, and
+   the margin does not paper over it: it is a correctness item first and a
+   conservatism one second.**
+
+   The visibility oracle only ever queried objects that *survived* culling, so
+   it measured drawing what did not need drawing and was structurally blind to
+   the opposite error. It now also re-draws everything the Hi-Z tests culled,
+   against the same finished depth buffer: any samples mean the object would
+   have been visible and the cull was wrong. `T` runs the sweep unattended and
+   writes `hiz_margin_sweep.csv`; `I` steps the margin by hand.
+
+   Release, grid 512, spawn view, camera turning at about 36 degrees a second
+   through the same arc on every step, 60 measured frames after 30 settling:
+
+   | margin | drawn | false culls | wasted | hi-z cpu | geometry gpu |
+   |--------|-------|-------------|--------|----------|--------------|
+   | 0      | 673.5 | 36.8        | 207.6  | 0.703    | 1.457        |
+   | 1      | 742.5 | 22.9        | 256.8  | 0.762    | 1.513        |
+   | 2      | 777.9 | 14.9        | 280.4  | 0.838    | 1.513        |
+
+   So the shipped default wrongly culls around 23 objects every frame while the
+   camera turns. Those are holes in the image, and nothing was counting them.
+   Raising the margin helps and does not converge -- it buys roughly a third
+   fewer errors per step while costing about 5% of the objects drawn and 8% of
+   the Hi-Z cpu time -- because the error is stale *data*, not a footprint that
+   is too narrow. No margin can fix that; only testing against depth from this
+   frame can.
+
+   Held still, the same sweep reports zero false culls at every margin
+   including zero, which is why this went unnoticed: with nothing moving there
+   is no staleness to absorb, and the margin looks like pure waste. That the
+   two readings disagree is the point of measuring under motion.
+
+   The counter was validated against a deliberately unconservative
+   configuration (`HiZProbeRectangleShrink` at 0.30), where it reports 17.98,
+   6.47 and 3.02 false culls for the three margins: it fires, and it falls with
+   margin, which is what a staleness margin should do.
+
+   Before the full two-phase build, one cheaper thing is worth testing: the
+   test currently compares an object's *current* screen rectangle against depth
+   from an *older* camera, which is a straight misalignment. Storing the view
+   projection matrix the readback was built with, and projecting bounds through
+   that instead, would make the test self consistent and should remove the part
+   of the error that is not true disocclusion. The hull path already projects
+   its own vertices, so it is nearly a one line experiment there.
 
 ### Measurement debt
 

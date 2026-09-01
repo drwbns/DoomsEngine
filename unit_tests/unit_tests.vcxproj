@@ -155,6 +155,8 @@
     <ClCompile Include="test\EveryCullingTests.cpp" />
     <ClCompile Include="test\ConvexHullTests.cpp" />
     <ClCompile Include="test\MeshLodSelectionTests.cpp" />
+    <ClCompile Include="test\HiZCellRangeTests.cpp" />
+    <ClCompile Include="test\SweepControllerTests.cpp" />
     <ClCompile Include="..\Doom3\ThirdParty\assimp\contrib\gtest\src\gtest-all.cc" />
     <ClCompile Include="..\Doom3\ThirdParty\assimp\contrib\gtest\src\gtest_main.cc" />
     <ClCompile Include="..\Doom3\Source\Engine\Rendering\Culling\ConvexHull.cpp" />

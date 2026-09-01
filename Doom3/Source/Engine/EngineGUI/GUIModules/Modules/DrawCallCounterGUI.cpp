@@ -117,6 +117,11 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			// is one lost keypress away from comparing the wrong grids against
 			// each other. Which happened.
 			ImGui::Text("Hi-Z grid  : %u wide", dooms::graphics::graphicsSetting::HiZReadbackTargetWidth);
+
+			// Beside the grid, because the two together decide how much screen
+			// a margin cell actually covers: one cell at 512 wide is a quarter
+			// of what it is at 128.
+			ImGui::Text("Hi-Z margin: %u cells", dooms::graphics::graphicsSetting::HiZStalenessMarginCells);
 		}
 
 		// What instancing could collapse the geometry pass to, if it existed.
@@ -166,6 +171,22 @@ void dooms::ui::DrawCallCounterGUI::Render()
 				"Wasted     : %u of %u drawn (%.1f%%)",
 				wastedCount, testedCount,
 				(testedCount > 0) ? (100.0f * static_cast<float>(wastedCount) / static_cast<float>(testedCount)) : 0.0f);
+		}
+
+		// The error in the other direction, which nothing else here can show:
+		// objects the Hi-Z tests removed that would have drawn pixels. Any
+		// value above zero is a hole in the image, so it is red at one rather
+		// than at some percentage.
+		if (dooms::graphics::graphicsSetting::CullStatOracleFalseCullTestedCount > 0 ||
+			dooms::graphics::graphicsSetting::CullStatOracleFalseCullCount > 0)
+		{
+			const unsigned int falseCullCount = dooms::graphics::graphicsSetting::CullStatOracleFalseCullCount;
+			const unsigned int falseCullTestedCount = dooms::graphics::graphicsSetting::CullStatOracleFalseCullTestedCount;
+
+			ImGui::TextColored(
+				(falseCullCount > 0) ? ImVec4(1.0f, 0.4f, 0.4f, 1.0f) : ImVec4(0.6f, 1.0f, 0.6f, 1.0f),
+				"False culls: %u of %u culled",
+				falseCullCount, falseCullTestedCount);
 		}
 
 		// The two passes that touch pixels. Shown together because a depth

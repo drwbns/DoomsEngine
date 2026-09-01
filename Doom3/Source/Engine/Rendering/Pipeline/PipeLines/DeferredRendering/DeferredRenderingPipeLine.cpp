@@ -1,6 +1,7 @@
 #include "DeferredRenderingPipeLine.h"
 
 #include <Rendering/Culling/OccludeeHull.h>
+#include <Rendering/Culling/HiZCellRange.h>
 #include <Rendering/Renderer/MeshRenderer.h>
 
 #include <atomic>
@@ -24,6 +25,7 @@
 #include <Rendering/Culling/EveryCulling/CullingModule/MaskedSWOcclusionCulling/MaskedSWOcclusionCulling.h>
 #include <cstring>
 #include <chrono>
+#include <fstream>
 #include <array>
 #include <Misc/AccelerationContainer/BVH/BVH.h>
 #include <Rendering/Renderer/RendererStaticIterator.h>
@@ -394,10 +396,14 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 		// object can be. That is the whole point: the box's nearest corner sits
 		// well in front of a rounded rock and made it untestable against
 		// anything it was tucked behind.
-		const INT32 startX = static_cast<INT32>(math::Max(0.0f, minU) * mHiZReadbackWidth) - 1;
-		const INT32 endX = static_cast<INT32>(math::Min(1.0f, maxU) * mHiZReadbackWidth) + 1;
-		const INT32 startY = static_cast<INT32>(math::Max(0.0f, minV) * mHiZReadbackHeight) - 1;
-		const INT32 endY = static_cast<INT32>(math::Min(1.0f, maxV) * mHiZReadbackHeight) + 1;
+		const INT32 marginInCells = static_cast<INT32>(graphicsSetting::HiZStalenessMarginCells);
+
+		INT32 startX = 0;
+		INT32 endX = 0;
+		INT32 startY = 0;
+		INT32 endY = 0;
+		GetHiZCellRange(minU, maxU, mHiZReadbackWidth, marginInCells, startX, endX);
+		GetHiZCellRange(minV, maxV, mHiZReadbackHeight, marginInCells, startY, endY);
 
 		if (startX > endX || startY > endY)
 		{
@@ -442,8 +448,8 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 
 				// Rounded outwards, and the staleness margin kept, so the
 				// narrower span can still only ever add cells to the test.
-				rowStartX = static_cast<INT32>(std::floor(rowMinX)) - 1;
-				rowEndX = static_cast<INT32>(std::ceil(rowMaxX)) + 1;
+				rowStartX = static_cast<INT32>(std::floor(rowMinX)) - marginInCells;
+				rowEndX = static_cast<INT32>(std::ceil(rowMaxX)) + marginInCells;
 
 				rowStartX = math::Max(rowStartX, startX);
 				rowEndX = math::Min(rowEndX, endX);
@@ -486,6 +492,180 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZHullOcclusionCulling(do
 			std::chrono::steady_clock::now() - testStartTime).count());
 }
 
+void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camera* const targetCamera)
+{
+	// The margins the sweep walks, in order. Zero is the unconservative
+	// baseline every other value is paying for.
+	static const unsigned int marginSteps[] = { 0u, 1u, 2u };
+	constexpr unsigned int marginStepCount = static_cast<unsigned int>(sizeof(marginSteps) / sizeof(marginSteps[0]));
+
+	// Long enough for the readback, the oracle's queries and the gpu timers to
+	// have flushed through, then long enough that a camera sitting still is
+	// not being averaged with one that was still moving.
+	constexpr unsigned int settleFrameCount = 30;
+	constexpr unsigned int measureFrameCount = 60;
+
+	// Held until the Hi-Z path is actually producing data, so a sweep asked
+	// for at startup does not measure its first margin against a scene that
+	// is still loading and then blame the difference on the margin.
+	if (graphicsSetting::IsHiZMarginSweepRequested == true &&
+		bmIsHiZReadbackDataValid == true &&
+		mHiZReadbackData.empty() == false)
+	{
+		graphicsSetting::IsHiZMarginSweepRequested = false;
+
+		if (bmIsHiZMarginSweepRunning == false)
+		{
+			// The oracle is what the sweep is reading, so a sweep without it
+			// would produce a table of zeroes and look like a result.
+			graphicsSetting::IsVisibilityOracleEnabled = true;
+
+			mHiZMarginSweepRestoreValue = graphicsSetting::HiZStalenessMarginCells;
+			mHiZMarginSweepController = SweepController(settleFrameCount, measureFrameCount, marginStepCount);
+			mHiZMarginSweepAccumulator.Reset();
+			bmIsHiZMarginSweepRunning = true;
+
+			mHiZMarginSweepBaseRotation = targetCamera->GetTransform()->GetRotation();
+			mHiZMarginSweepFrameInStep = 0;
+
+			graphicsSetting::HiZStalenessMarginCells = marginSteps[0];
+
+			D_RELEASE_LOG(eLogType::D_LOG, "Hi-Z margin sweep : started, %u steps of %u + %u frames",
+				marginStepCount, settleFrameCount, measureFrameCount);
+		}
+	}
+
+	if (bmIsHiZMarginSweepRunning == false)
+	{
+		return;
+	}
+
+	// The camera turns at a constant rate through each step, from the same
+	// starting orientation every time. A margin absorbing staleness has
+	// nothing to absorb while the view is still, so a still measurement can
+	// only ever conclude that no margin is needed.
+	constexpr FLOAT32 sweepYawRadiansPerFrame = 0.0105f; // about 0.6 degrees
+
+	if (IsValid(targetCamera->GetTransform()) == true)
+	{
+		const FLOAT32 yawRadians = static_cast<FLOAT32>(mHiZMarginSweepFrameInStep) * sweepYawRadiansPerFrame;
+
+		targetCamera->GetTransform()->SetRotation(
+			math::Quaternion(math::Vector3(0.0f, yawRadians, 0.0f)) * mHiZMarginSweepBaseRotation);
+	}
+
+	mHiZMarginSweepFrameInStep++;
+
+	const SweepFrameResult sweepResult = mHiZMarginSweepController.AdvanceFrame();
+
+	if (sweepResult.bmShouldAccumulate == true)
+	{
+		mHiZMarginSweepAccumulator.mDrawnRendererCount += graphicsSetting::CullStatDrawnRendererCount;
+		mHiZMarginSweepAccumulator.mFalseCullCount += graphicsSetting::CullStatOracleFalseCullCount;
+		mHiZMarginSweepAccumulator.mFalseCullTestedCount += graphicsSetting::CullStatOracleFalseCullTestedCount;
+		mHiZMarginSweepAccumulator.mOracleInvisibleCount += graphicsSetting::CullStatOracleInvisibleCount;
+		mHiZMarginSweepAccumulator.mOracleTestedCount += graphicsSetting::CullStatOracleTestedCount;
+		mHiZMarginSweepAccumulator.mHiZTestMilliseconds += graphicsSetting::CpuStatHiZTestMilliseconds;
+		mHiZMarginSweepAccumulator.mGeometryPassMilliseconds += graphicsSetting::GpuStatGeometryPassMilliseconds;
+	}
+
+	if (sweepResult.bmIsStepComplete == true)
+	{
+		const double frameCount = static_cast<double>(mHiZMarginSweepController.GetMeasureFrameCount());
+		const unsigned int measuredMargin = marginSteps[sweepResult.mCompletedStep];
+
+		std::ofstream sweepFile("hiz_margin_sweep.csv", std::ios::app);
+
+		if (sweepFile.is_open() == true)
+		{
+			if (sweepResult.mCompletedStep == 0)
+			{
+				sweepFile << "margin,grid,drawn,false_culls,false_cull_tested,wasted,oracle_tested,hiz_cpu_ms,geometry_gpu_ms\n";
+			}
+
+			sweepFile << measuredMargin << ','
+				<< graphicsSetting::HiZReadbackTargetWidth << ','
+				<< (mHiZMarginSweepAccumulator.mDrawnRendererCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mFalseCullCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mFalseCullTestedCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mOracleInvisibleCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mOracleTestedCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mHiZTestMilliseconds / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mGeometryPassMilliseconds / frameCount) << '\n';
+		}
+
+		D_RELEASE_LOG(eLogType::D_LOG,
+			"Hi-Z margin sweep : margin %u -> drawn %.1f, false culls %.2f of %.1f, hi-z %.3f ms",
+			measuredMargin,
+			mHiZMarginSweepAccumulator.mDrawnRendererCount / frameCount,
+			mHiZMarginSweepAccumulator.mFalseCullCount / frameCount,
+			mHiZMarginSweepAccumulator.mFalseCullTestedCount / frameCount,
+			mHiZMarginSweepAccumulator.mHiZTestMilliseconds / frameCount);
+
+		mHiZMarginSweepAccumulator.Reset();
+
+		// Back to the start of the same arc, so the next margin is measured
+		// over the identical camera path rather than the next stretch of scene.
+		mHiZMarginSweepFrameInStep = 0;
+
+		const unsigned int nextStep = mHiZMarginSweepController.GetCurrentStep();
+		if (nextStep < marginStepCount)
+		{
+			graphicsSetting::HiZStalenessMarginCells = marginSteps[nextStep];
+		}
+	}
+
+	if (sweepResult.bmIsSweepComplete == true)
+	{
+		bmIsHiZMarginSweepRunning = false;
+		graphicsSetting::HiZStalenessMarginCells = mHiZMarginSweepRestoreValue;
+
+		if (IsValid(targetCamera->GetTransform()) == true)
+		{
+			targetCamera->GetTransform()->SetRotation(mHiZMarginSweepBaseRotation);
+		}
+
+		D_RELEASE_LOG(eLogType::D_LOG,
+			"Hi-Z margin sweep : done, wrote hiz_margin_sweep.csv, margin restored to %u",
+			mHiZMarginSweepRestoreValue);
+	}
+}
+
+void dooms::graphics::DeferredRenderingPipeLine::SnapshotPreHiZVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex)
+{
+	mPreHiZVisibleRenderers.clear();
+
+	if (graphicsSetting::IsVisibilityOracleEnabled == false)
+	{
+		return;
+	}
+
+	// Only meaningful while the camera is culling at all; with culling off
+	// nothing below can cull anything and every renderer would trivially
+	// survive.
+	if (targetCamera->GetCameraFlag(dooms::eCameraFlag::IS_CULLED) == false)
+	{
+		return;
+	}
+
+	const std::vector<Renderer*>& renderers = RendererComponentStaticIterator::GetSingleton()->GetSortedRendererInLayer();
+
+	for (Renderer* const renderer : renderers)
+	{
+		if (IsValid(renderer) == false ||
+			renderer->GetIsComponentEnabled() == false ||
+			renderer->GetIsBatched() == true)
+		{
+			continue;
+		}
+
+		if (renderer->GetIsCulled(static_cast<UINT32>(cameraIndex)) == 0)
+		{
+			mPreHiZVisibleRenderers.push_back(renderer);
+		}
+	}
+}
+
 void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex)
 {
 	if (GraphicsAPI::CreateQuery == nullptr || GraphicsAPI::BeginQuery == nullptr ||
@@ -500,6 +680,8 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 	{
 		UINT32 resolvedCount = 0;
 		UINT32 invisibleCount = 0;
+		UINT32 falseCullResolvedCount = 0;
+		UINT32 falseCullCount = 0;
 
 		for (UINT32 queryIndex = 0; queryIndex < mVisibilityOraclePendingCount; queryIndex++)
 		{
@@ -511,30 +693,49 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 					&passedSampleCount,
 					nullptr) != 0)
 			{
-				resolvedCount++;
-
-				if (passedSampleCount == 0)
+				if (queryIndex < mVisibilityOracleFalseCullStartIndex)
 				{
-					invisibleCount++;
+					resolvedCount++;
+
+					if (passedSampleCount == 0)
+					{
+						invisibleCount++;
+					}
+				}
+				else
+				{
+					// Inverted: this object was culled and not drawn, so any
+					// sample at all is a pixel the frame should have had.
+					falseCullResolvedCount++;
+
+					if (passedSampleCount > 0)
+					{
+						falseCullCount++;
+					}
 				}
 			}
 		}
 
 		// Only published when every query came back. A partial answer would
 		// read as an improvement rather than as a missing measurement.
-		if (resolvedCount == mVisibilityOraclePendingCount)
+		if ((resolvedCount + falseCullResolvedCount) == mVisibilityOraclePendingCount)
 		{
 			graphicsSetting::CullStatOracleTestedCount = resolvedCount;
 			graphicsSetting::CullStatOracleInvisibleCount = invisibleCount;
+			graphicsSetting::CullStatOracleFalseCullTestedCount = falseCullResolvedCount;
+			graphicsSetting::CullStatOracleFalseCullCount = falseCullCount;
 		}
 
 		mVisibilityOraclePendingCount = 0;
+		mVisibilityOracleFalseCullStartIndex = 0;
 	}
 
 	if (graphicsSetting::IsVisibilityOracleEnabled == false)
 	{
 		graphicsSetting::CullStatOracleTestedCount = 0;
 		graphicsSetting::CullStatOracleInvisibleCount = 0;
+		graphicsSetting::CullStatOracleFalseCullTestedCount = 0;
+		graphicsSetting::CullStatOracleFalseCullCount = 0;
 		return;
 	}
 
@@ -562,6 +763,43 @@ void dooms::graphics::DeferredRenderingPipeLine::MeasureTrueVisibility(dooms::Ca
 		}
 
 		if (bIsCameraCulling && renderer->GetIsCulled(targetCamera->CameraIndexInCullingSystem) != 0)
+		{
+			continue;
+		}
+
+		if (queryIndex >= mVisibilityOracleQueries.size())
+		{
+			mVisibilityOracleQueries.push_back(GraphicsAPI::CreateQuery(GraphicsAPI::QUERY_OCCLUSION));
+		}
+
+		if (mVisibilityOracleQueries[queryIndex] == 0)
+		{
+			continue;
+		}
+
+		GraphicsAPI::BeginQuery(mVisibilityOracleQueries[queryIndex]);
+		renderer->Draw();
+		GraphicsAPI::EndQuery(mVisibilityOracleQueries[queryIndex]);
+
+		queryIndex++;
+	}
+
+	// Everything the Hi-Z tests culled, drawn the same way against the same
+	// finished buffer. These objects are absent from that buffer, so nothing
+	// of theirs can occlude itself: a sample here is a pixel the frame would
+	// have shown, and the cull that removed it was wrong.
+	mVisibilityOracleFalseCullStartIndex = queryIndex;
+
+	for (Renderer* const renderer : mPreHiZVisibleRenderers)
+	{
+		if (IsValid(renderer) == false ||
+			renderer->GetIsComponentEnabled() == false)
+		{
+			continue;
+		}
+
+		// Survived after all, so it was drawn and is counted above.
+		if (renderer->GetIsCulled(static_cast<UINT32>(cameraIndex)) == 0)
 		{
 			continue;
 		}
@@ -1053,12 +1291,9 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 			const FLOAT32 minV = 1.0f - (entityBlock->mAABBMaxScreenSpacePointY[entityIndex] / cullingHeight);
 			const FLOAT32 maxV = 1.0f - (entityBlock->mAABBMinScreenSpacePointY[entityIndex] / cullingHeight);
 
-			// Widened by a cell on every side. The depth being tested against is
-			// a frame or two old, so an object may have moved, or the camera may
-			// have. Testing a larger rectangle can only bring in more cells,
-			// which can only raise the farthest depth found, which can only make
-			// the test less willing to cull. The error goes towards drawing
-			// something needlessly rather than dropping something visible.
+			// Widened by the staleness margin on every side; see
+			// GetHiZCellRange, and graphicsSetting::HiZStalenessMarginCells for
+			// why that widening is needed and what it costs.
 			// The probe insets the rectangle towards its centre, standing in for
 			// a silhouette that follows the object rather than boxing it.
 			FLOAT32 probedMinU = minU;
@@ -1079,10 +1314,14 @@ void dooms::graphics::DeferredRenderingPipeLine::ApplyHiZOcclusionCulling(const 
 				probedMaxV -= insetV;
 			}
 
-			const INT32 startX = static_cast<INT32>(math::Max(0.0f, probedMinU) * mHiZReadbackWidth) - 1;
-			const INT32 endX = static_cast<INT32>(math::Min(1.0f, probedMaxU) * mHiZReadbackWidth) + 1;
-			const INT32 startY = static_cast<INT32>(math::Max(0.0f, probedMinV) * mHiZReadbackHeight) - 1;
-			const INT32 endY = static_cast<INT32>(math::Min(1.0f, probedMaxV) * mHiZReadbackHeight) + 1;
+			const INT32 marginInCells = static_cast<INT32>(graphicsSetting::HiZStalenessMarginCells);
+
+			INT32 startX = 0;
+			INT32 endX = 0;
+			INT32 startY = 0;
+			INT32 endY = 0;
+			GetHiZCellRange(probedMinU, probedMaxU, mHiZReadbackWidth, marginInCells, startX, endX);
+			GetHiZCellRange(probedMinV, probedMaxV, mHiZReadbackHeight, marginInCells, startY, endY);
 
 			if (startX > endX || startY > endY)
 			{
@@ -1542,6 +1781,11 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	// this frame's pyramid would stall the cpu on the gpu.
 	// Before the Hi-Z test, so it can skip whatever this already removed.
 	ApplyBVHFrustumCulling(targetCamera, cameraIndex);
+
+	// Between the cheap culls and the Hi-Z ones, so whatever the Hi-Z tests
+	// remove from here is attributable to them alone.
+	SnapshotPreHiZVisibility(targetCamera, cameraIndex);
+
 	ApplyHiZOcclusionCulling(cameraIndex);
 	ApplyHiZHullOcclusionCulling(targetCamera, cameraIndex);
 	UpdateCullStatistics(cameraIndex);
@@ -1623,6 +1867,14 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	// After the geometry pass, so the depth buffer it tests against is the
 	// finished one and a zero result really does mean invisible.
 	MeasureTrueVisibility(targetCamera, cameraIndex);
+
+	// After the oracle has published this frame's answers, so the sweep
+	// averages the numbers the panel is showing rather than the previous
+	// frame's. Main camera only, since the settings it drives are global.
+	if (targetCamera->IsMainCamera() == true)
+	{
+		TickHiZMarginSweep(targetCamera);
+	}
 
 	// Overdraw gets its own pass over the scene. It forces every renderer onto a
 	// material that adds a fixed amount per fragment, which cannot be shared

@@ -4,6 +4,8 @@
 
 #include "../DefaultGraphcisPipeLine.h"
 #include "DeferredRenderingDrawer.h"
+#include <Rendering/Measurement/SweepController.h>
+#include <Quaternion.h>
 
 #include "DeferredRenderingPipeLine.reflection.h"
 namespace dooms
@@ -178,6 +180,82 @@ namespace dooms
 			/// </summary>
 			std::vector<unsigned long long> mVisibilityOracleQueries;
 			UINT32 mVisibilityOraclePendingCount{ 0 };
+
+			/// <summary>
+			/// Where the false cull queries start within the pending batch.
+			///
+			/// Queries below this index are survivors, and an answer of no
+			/// samples means one was drawn needlessly. Queries from here on are
+			/// objects the Hi-Z tests culled, where the reading is inverted: any
+			/// samples at all mean the object would have been visible and the
+			/// cull was wrong.
+			/// </summary>
+			UINT32 mVisibilityOracleFalseCullStartIndex{ 0 };
+
+			/// <summary>
+			/// The renderers still visible immediately before the Hi-Z tests run.
+			///
+			/// Anything in here that is culled by the time the oracle runs was
+			/// culled by those tests specifically, rather than by the frustum or
+			/// by distance, which is what makes the false cull count attributable
+			/// rather than merely true. Held by pointer, because the renderer
+			/// list is sorted between the two points.
+			/// </summary>
+			std::vector<dooms::Renderer*> mPreHiZVisibleRenderers;
+
+			/// <summary>
+			/// Records which renderers the Hi-Z tests are about to be given a
+			/// chance to cull. Costs a pass over the renderer list, so it only
+			/// runs while the oracle is on.
+			/// </summary>
+			void SnapshotPreHiZVisibility(dooms::Camera* const targetCamera, const size_t cameraIndex);
+
+			/// <summary>
+			/// The automatic staleness margin sweep: holds each margin for a
+			/// settle period and then averages a measurement period, writing one
+			/// row per margin to hiz_margin_sweep.csv.
+			/// </summary>
+			SweepController mHiZMarginSweepController;
+
+			struct HiZMarginSweepAccumulator
+			{
+				double mDrawnRendererCount{ 0.0 };
+				double mFalseCullCount{ 0.0 };
+				double mFalseCullTestedCount{ 0.0 };
+				double mOracleInvisibleCount{ 0.0 };
+				double mOracleTestedCount{ 0.0 };
+				double mHiZTestMilliseconds{ 0.0 };
+				double mGeometryPassMilliseconds{ 0.0 };
+
+				void Reset()
+				{
+					*this = HiZMarginSweepAccumulator{};
+				}
+			};
+
+			HiZMarginSweepAccumulator mHiZMarginSweepAccumulator;
+			bool bmIsHiZMarginSweepRunning{ false };
+			unsigned int mHiZMarginSweepRestoreValue{ 1 };
+
+			/// <summary>
+			/// The camera orientation the sweep started from, and how far into
+			/// its turn the current step is.
+			///
+			/// The sweep turns the camera, because a margin that exists to
+			/// absorb staleness cannot be judged by a camera that never moves:
+			/// with nothing in motion there is no staleness to absorb, and any
+			/// margin looks equally unnecessary. Every step is put back to this
+			/// orientation and turned through the same arc, so the steps differ
+			/// in the margin and in nothing else.
+			/// </summary>
+			math::Quaternion mHiZMarginSweepBaseRotation{ math::Vector3(0.0f, 0.0f, 0.0f) };
+			unsigned int mHiZMarginSweepFrameInStep{ 0 };
+
+			/// <summary>
+			/// Advances the margin sweep by one frame. Does nothing unless a
+			/// sweep has been requested or is already running.
+			/// </summary>
+			void TickHiZMarginSweep(dooms::Camera* const targetCamera);
 
 			/// <summary>
 			/// Re-draws everything the geometry pass drew, against the depth
