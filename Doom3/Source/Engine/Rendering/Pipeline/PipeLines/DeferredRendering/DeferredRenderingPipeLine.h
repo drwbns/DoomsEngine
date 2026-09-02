@@ -228,6 +228,8 @@ namespace dooms
 				unsigned long long mWorstFalseCullPixelCount{ 0 };
 				double mDrawGroupCount{ 0.0 };
 				double mInstancedDrawCallCount{ 0.0 };
+				double mGeometryPassCpuMilliseconds{ 0.0 };
+				double mDrawSubmissionMilliseconds{ 0.0 };
 				double mMeshBindCount{ 0.0 };
 				double mIndexCount{ 0.0 };
 				double mOracleInvisibleCount{ 0.0 };

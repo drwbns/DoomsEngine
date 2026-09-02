@@ -281,15 +281,17 @@ namespace
 
 static bool DrawRenderersInstancedImpl(const std::vector<dooms::Renderer*>& sortedRenderers)
 {
-	// Off until the shader half lands. The gbuffer vertex shader still takes
-	// its model matrix from a uniform block, so drawing a run of objects
-	// through this would give every one of them the same transform. See
-	// graphicsSetting::IsInstancingEnabled for what remains.
-	if (graphicsSetting::IsInstancingEnabled == false)
-	{
-		return false;
-	}
-
+	// Deliberately not gated on IsInstancingEnabled.
+	//
+	// The gbuffer vertex shader reads its model matrix from the per instance
+	// stream whether or not instancing is on, so this path has to run either
+	// way in order to bind that stream. The toggle decides how many objects a
+	// draw carries, further down, and nothing else.
+	//
+	// Gating here instead shipped a frame where every object drew at whatever
+	// was left in the buffer: 2371 objects drawn against 743, and 4.39 million
+	// pixels against 1.645 million, because the depth buffer it produced was
+	// wrong and the occlusion test then culled almost nothing.
 	if (GraphicsAPI::DrawIndexedInstanced == nullptr ||
 		GraphicsAPI::CreateBufferObject == nullptr ||
 		GraphicsAPI::UpdateDataToBuffer == nullptr ||
@@ -502,6 +504,9 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 
 	{
 		D_START_PROFILING(DrawLoop, dooms::profiler::eProfileLayers::Rendering);
+
+		const std::chrono::steady_clock::time_point geometryPassStartTime = std::chrono::steady_clock::now();
+
 		const bool targetCamera_IS_CULLED_flag_on = targetCamera->GetCameraFlag(dooms::eCameraFlag::IS_CULLED);
 
 		const bool IsExistCondtionFunc = static_cast<bool>(ConditionFunc);
@@ -569,6 +574,11 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 		//
 		// The fallback below is for the passes that swap in a fixed material
 		// whose shader still takes the matrix from a uniform block.
+		// Timed from here, so this covers issuing the draws and nothing else:
+		// not the gather, not the sort. That is the part instancing is meant
+		// to make cheaper, and the part the gpu timer cannot see.
+		const std::chrono::steady_clock::time_point submissionStartTime = std::chrono::steady_clock::now();
+
 		const bool bIsInstancedPathUsed = DrawRenderersInstancedImpl(visibleRenderers);
 
 		if (bIsInstancedPathUsed == false)
@@ -582,10 +592,19 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 			graphicsSetting::CullStatInstancedObjectCount = static_cast<unsigned int>(visibleRenderers.size());
 		}
 
+		const FLOAT32 submissionMilliseconds = static_cast<FLOAT32>(
+			std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+				std::chrono::steady_clock::now() - submissionStartTime).count());
+
 		// Only for the pass that shades, so a depth pre pass does not report
 		// over the top of the numbers for the pass it precedes.
 		if (dooms::graphics::FixedMaterial::GetSingleton()->GetFixedMaterial() == nullptr)
 		{
+			graphicsSetting::CpuStatDrawSubmissionMilliseconds = submissionMilliseconds;
+			graphicsSetting::CpuStatGeometryPassMilliseconds = static_cast<FLOAT32>(
+				std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+					std::chrono::steady_clock::now() - geometryPassStartTime).count());
+
 			static std::vector<std::pair<const void*, const void*>> drawStateKeys;
 			drawStateKeys.clear();
 			drawStateKeys.reserve(visibleRenderers.size());

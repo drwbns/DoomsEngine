@@ -6,33 +6,35 @@ namespace dooms
 	{
 		namespace graphicsSetting
 		{
-			// Draw everything sharing a mesh and a material in one call, with
-			// each copy reading its own model matrix from a per instance
-			// vertex stream.
+			// Draw everything sharing a mesh, a material and a detail level in
+			// one call, each copy reading its own model matrix from a per
+			// instance vertex stream.
 			//
-			// Measured ceiling before building it: 743 draws in the geometry
-			// pass share 51 distinct mesh and material pairs, a 14.6x collapse.
-			// Mesh binds were already down at 15.7, so what is left to win is
-			// the submission itself rather than the binding around it.
+			// Correct: with it on the oracle counts 1.6448 million drawn
+			// pixels against 1.64492 million with it off, so every object
+			// lands in the pixels it did before.
 			//
-			// Works, and correct: with it on, the oracle counts 1.64532 million
-			// drawn pixels against 1.6451 million with it off, matching to a
-			// hundredth of a percent, so the geometry lands where it did.
+			// Measured, at margin 1:
 			//
-			// Off anyway, because no win has been measured. It collapses 742.8
-			// draws to 413.9 -- not to the 51 the draw group count suggests,
-			// because a run has to share a detail level as well as a mesh and
-			// a material, and level of detail splits each group about eight
-			// ways. The geometry pass reads 1.505 ms against 1.447, which is
-			// noise in the wrong direction, and that timer would not show a
-			// win anyway: what instancing saves is cpu submission, and nothing
-			// times the geometry pass on the cpu.
+			//                    off       on
+			//   draws issued     742.8    413.9
+			//   geometry cpu     0.196    0.173 ms
+			//   submission cpu   0.113    0.094 ms
 			//
-			// So the next thing this needs is a cpu timer around submission,
-			// not more instancing. Two things would raise the collapse if it
-			// turns out to be worth it: sorting by detail level as well as by
-			// mesh and material, and noting that CullStatDrawGroupCount
-			// overstates the ceiling whenever level of detail is on.
+			// So it halves the draws and saves about 0.023 ms, under one
+			// percent of a 2.8 ms frame. The plan carried half a millisecond
+			// for this, which was twenty five times too generous.
+			//
+			// Off, because the result is not clean rather than because it is
+			// small: at margin 2 the same measurement goes the other way,
+			// 0.112 ms to 0.118, so run to run variation is the size of the
+			// effect. One sweep per configuration is not enough to call it.
+			//
+			// It does not reach the 51 draws the group count suggests, because
+			// a run must share a detail level too -- one draw carries one
+			// index buffer -- and that splits each group about eight ways.
+			// CullStatDrawGroupCount overstates the ceiling whenever level of
+			// detail is on.
 			extern inline bool IsInstancingEnabled{ false };
 
 			// How many draw calls the geometry pass actually issued, and how
@@ -129,6 +131,25 @@ namespace dooms
 			// the heatmap looks.
 			extern inline float GpuStatGeometryPassMilliseconds{ 0.0f };
 			extern inline float GpuStatDepthPrePassMilliseconds{ 0.0f };
+
+			// What the geometry pass costs the cpu, beside what it costs the
+			// gpu.
+			//
+			// Built because instancing could not be judged without it. It
+			// collapses 742.8 draws to 413.9 and the gpu timer does not move,
+			// which is not evidence either way: what fewer draws save is the
+			// cpu time spent issuing them, and nothing here was measuring
+			// that. A technique whose whole benefit is submission cost needs a
+			// submission number or it cannot be argued about honestly.
+			//
+			// Two numbers rather than one, because instancing moves work
+			// around inside the pass as well as removing it: it adds a walk
+			// over the visible set to gather matrices and a buffer upload,
+			// and it removes per draw constant buffer writes and draw calls.
+			// The total says whether the pass got cheaper; submission says
+			// whether the part instancing targets got cheaper.
+			extern inline float CpuStatGeometryPassMilliseconds{ 0.0f };
+			extern inline float CpuStatDrawSubmissionMilliseconds{ 0.0f };
 
 			// Skip rewriting an entity's culling data when its transform did not
 			// move. A toggle rather than an unconditional change, so the saving

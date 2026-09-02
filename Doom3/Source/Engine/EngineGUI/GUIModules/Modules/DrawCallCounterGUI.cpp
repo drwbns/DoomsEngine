@@ -220,6 +220,16 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			ImGui::Text("Geometry   : %.3f ms (GPU)", dooms::graphics::graphicsSetting::GpuStatGeometryPassMilliseconds);
 		}
 
+		// The cpu side of the same pass, split so that a technique aimed at
+		// submission can be judged on submission. Fewer draw calls cost the
+		// gpu nothing, so the line above cannot show what they save.
+		if (dooms::graphics::graphicsSetting::CpuStatGeometryPassMilliseconds > 0.0f)
+		{
+			ImGui::Text("Geometry   : %.3f ms (CPU, %.3f submitting)",
+				dooms::graphics::graphicsSetting::CpuStatGeometryPassMilliseconds,
+				dooms::graphics::graphicsSetting::CpuStatDrawSubmissionMilliseconds);
+		}
+
 		if (dooms::graphics::graphicsSetting::GpuStatDepthPrePassMilliseconds > 0.0f)
 		{
 			ImGui::Text("Depth pre  : %.3f ms (GPU)", dooms::graphics::graphicsSetting::GpuStatDepthPrePassMilliseconds);

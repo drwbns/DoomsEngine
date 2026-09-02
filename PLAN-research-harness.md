@@ -693,38 +693,49 @@ Ordered by what would change a decision, not by size.
 
 ### Performance, in measured order
 
-4. **Instancing.** Built, correct, and off, because it wins nothing
-   measurable yet.
+4. **Instancing.** Built, correct, measured, and off. Worth about 0.023 ms,
+   which is one percent of a frame and twenty five times less than the half
+   millisecond this list carried for it.
 
-   Correctness is not an opinion here: with it on the oracle counts 1.64532
-   million drawn pixels against 1.6451 million with it off, a hundredth of a
-   percent apart, so every object lands in the pixels it did before.
+   Correctness is measured rather than asserted: with it on the oracle counts
+   1.6448 million drawn pixels against 1.64492 million with it off, so every
+   object lands in the pixels it did before.
 
-   It collapses 742.8 draws to 413.9. Not to the 51 the draw group count
-   promised: a run has to share a detail level as well as a mesh and a
-   material, since one draw carries one index buffer, and level of detail
-   splits each group about eight ways. `CullStatDrawGroupCount` therefore
-   overstates the ceiling whenever level of detail is on, which is worth
-   knowing before that number is quoted again.
+   | margin 1          | off    | on     |
+   |-------------------|--------|--------|
+   | draws issued      | 742.8  | 413.9  |
+   | geometry cpu      | 0.196  | 0.173  |
+   | submission cpu    | 0.113  | 0.094  |
+   | geometry gpu      | 1.447  | 1.505  |
 
-   The geometry pass reads 1.505 ms against 1.447, noise in the wrong
-   direction -- and that timer could not show this win anyway. What instancing
-   saves is cpu submission, and nothing here times the geometry pass on the
-   cpu. **That timer is the next thing to build, not more instancing.**
-   Sorting by detail level as well as by mesh and material would raise the
-   collapse, if the cpu number ever says it is worth having.
+   Off because the result is not clean rather than because it is small: at
+   margin 2 the same measurement reverses, 0.112 ms to 0.118, so run to run
+   variation is the size of the effect. One sweep per configuration.
+
+   Two things had to be built before this could be judged at all. The **cpu
+   timer around the geometry pass**, split into total and submission, because
+   what instancing saves is submission cost and the gpu timer structurally
+   cannot see it -- the gpu does the same work either way. And the draw group
+   count turned out to overstate the ceiling: a run has to share a detail
+   level as well as a mesh and a material, since one draw carries one index
+   buffer, and that splits each group about eight ways. 743 collapses to 414,
+   not to 51.
 
    The crash that cost most of a session was none of the things it looked
    like. `DefaultGraphcisPipeLine` is a reflected class and this build loads a
    prebuilt reflection database, so adding a member moves every offset that
    database describes and the engine dies during startup, before the first
    Present. Proven by adding one unused `unsigned long long`, touched by
-   nothing, and watching it die. The instance buffer state lives at file scope
-   in the .cpp now, which is what the draw loop already does with its own
-   scratch vectors.
+   nothing, and watching it die. **Do not add members to a reflected class
+   while the reflection data is prebuilt.** The instance buffer state lives at
+   file scope in the .cpp instead.
 
-   **Do not add members to a reflected class while the reflection data is
-   prebuilt.** That is the general lesson and it is written down nowhere else.
+   One regression shipped and was caught by these numbers rather than by eye:
+   the shader reads its matrix from the instance stream unconditionally, so
+   gating the path that binds that stream on the toggle drew the whole scene
+   at whatever was left in the buffer -- 2371 objects instead of 743, 4.39
+   million pixels instead of 1.645 million. The oracle noticed; nobody
+   watching the screen had.
 
 5. **Move the Hi-Z test onto the gpu.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.
