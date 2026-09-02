@@ -86,15 +86,30 @@ the build rather than a runtime step.
 
 ### 6. Tests
 
-`unit_tests` currently contains **zero source files**. Before this becomes a
-platform other people build on, the math, culling, serialization round trip, and
-reflection layer need coverage. Serialization especially: a save/load bug is
-silent and destroys user data.
+~~`unit_tests` currently contains zero source files.~~ **Partly done.** There are
+38 tests across seven suites now -- frustum extraction, the SIMD plane layout,
+tile rounding, hull containment, level of detail boundaries, Hi-Z cell
+arithmetic, sweep frame arithmetic -- passing in Debug and Release. Writing them
+found a real bug: a hull decimation that claimed to be conservative and was not.
+
+What is still uncovered is the part this plan cares about most. **Serialization
+does not exist yet, so neither does its round trip test**, and a save/load bug
+is silent and destroys user data. Write the test with the feature, not after.
 
 ### 7. Profiling that survives Release
 
-`D_START_PROFILING` compiles out unless `PROFILING_RELEASE_MODE`, and there is
-no GPU timing at all. You cannot profile what you ship.
+~~There is no GPU timing at all.~~ **Done.** Gpu timestamp rings, per module cpu
+timers, the geometry pass split into total and submission, and a frame budget
+that shows cpu and gpu against frame time separately. All of it works in
+Release, which is the only build worth measuring.
+
+`D_START_PROFILING` still compiles out unless `PROFILING_RELEASE_MODE`; the
+timers above sit beside it rather than replacing it.
+
+The budget line is what makes the rest of this plan schedulable: the frame is
+about 76% gpu busy, so cpu side work has roughly 0.65 ms to bid for, and any
+future proposal can be checked against that before it is built rather than
+after.
 
 ## Suggested order
 
@@ -119,8 +134,18 @@ is better than it first appears but still your problem.
 
 So the C++ side can still be diffed or rebased against upstream if needed, but
 nothing is being maintained, and the tool that runs it is gone. The prebuilt
-`clscan` was built against clang 12 and had to be rebuilt from source during
-this session, including fixing a stack-corrupting off-by-one in `ConsumeToken`.
+`clscan` was built against clang 12 and had to be rebuilt from source, including
+fixing a stack-corrupting off-by-one in `ConsumeToken`, quote handling for paths
+with spaces, and a string reader that desynchronised the whole database on any
+name longer than 1024 characters.
+
+**One risk this plan does not name, and should.** The reflection database
+describes a class layout, and nothing checks that the layout still matches. Add
+a member to a reflected base class and the engine dies during startup, before
+the first frame, with nothing in the log to say why -- proven by adding a single
+unused `unsigned long long` and watching it happen. Every item in this plan
+changes reflected types constantly, serialization most of all. A version or
+layout check that fails loudly is close to a prerequisite for the rest of it.
 
 In practice you are the maintainer. Everything in this plan leans on reflection,
 so budget for that ownership rather than discovering it later.
