@@ -774,10 +774,29 @@ Ordered by what would change a decision, not by size.
    that embeds clang. Nothing here can decide that; it is a call about the
    repository.
 
-7. **`clexport -map` still crashes** on a Debug map file, parsing 2,875
-   character lines into 1,024 byte buffers. Pre-existing clReflect bug, worked
-   around by running clexport without `-map`, which loses function call
-   addresses.
+7. **The `clexport -map` crash is fixed in source, and the shipped tools do
+   not have the fix yet.**
+
+   It was not the map parser. `Read<std::string>` in the binary database
+   serialiser clamped a length to a 1024 byte stack buffer and then read only
+   the clamped count, leaving the rest of a longer string in the stream. Every
+   read after it was shifted by that remainder, so one long name did not
+   truncate a name, it corrupted everything following it. The writer emits an
+   int length and exactly that many bytes, so exactly that many have to be
+   consumed; it now reads into a string sized from the length. Templated
+   symbol names in this engine reach nearly three thousand characters, so the
+   limit was met routinely rather than in theory.
+
+   Committed to the fork as `c9f65fb7`, and compiles. **It does not take
+   effect until the tools are rebuilt**, which needs CMake and clang, so the
+   dlls in `binary/bin/Release` still contain the bug and `-map` should still
+   be assumed to crash until they are rebuilt.
+
+   Rebuilding is now worth doing for a second reason: while attaching this, the
+   fork turned out to have every one of its fixes -- the quote handling, the
+   `ConsumeToken` off by one, this one -- sitting on a detached HEAD, reachable
+   only through the sha the outer repository records. They are on
+   `doom_engine_version` now, six commits ahead of origin, and unpushed.
 
 8. ~~**The startup timing instrumentation is permanent.**~~ **Done.** It now
    writes `startup_timing.txt` only when `DOOMS_STARTUP_TIMING` is set in the
