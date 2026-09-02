@@ -743,11 +743,36 @@ Ordered by what would change a decision, not by size.
 
 ### Build and infrastructure
 
-6. **Make the Release clReflect fix survive a clean checkout.** The engine side
-   is committed, but Release still depends on hand built clscan, clmerge and
-   clexport DLLs copied from `x64/Debug`. A fresh clone copies the stock ones
-   back and Release stops starting. Either commit the fixed DLLs or script the
-   copy as a build step.
+6. **The clReflect tools are now copied by the build, not by hand.** Half
+   done, and the half that is done was the one silently undoing itself.
+
+   The fork's fixed tools live in
+   `clReflect_ForDoomsEngine/binary/bin/Release`, and only they handle paths
+   containing spaces -- which this checkout has. They were being copied into
+   the output directory by hand, so every clean rebuild restored the stock
+   pair from `clReflect_automation` over the top and the fix quietly went
+   away. A post build step now copies the fork's tools last, in both Debug and
+   Release, and echoes a warning if they are missing rather than leaving the
+   failure to be discovered at runtime. Verified by deleting all three dlls
+   and rebuilding: they come back.
+
+   **A clean clone still cannot regenerate reflection data**, for two reasons
+   worth stating separately:
+
+   - The tools are build output and the submodule ignores them (`release/` in
+     its .gitignore, added deliberately by `f34389df`). The *source* fix is
+     committed -- `80009acb`, `f419b2ef`, `8eb7e184`, `aef5f0c6` -- so a clean
+     clone gets correct source and no binaries.
+   - `reflection_binary_Release_x64.cppbin` is not committed either, so there
+     is nothing to fall back on.
+
+   Two ways out, and the choice is about repository size rather than
+   difficulty. Committing the built tools costs about 69 MB and matches how
+   assimp, oneTBB and glslcc are already vendored and copied by post build
+   steps. Scripting the CMake build costs nothing in the repository and adds a
+   build dependency on CMake and clang, plus the time to build a 35 MB scanner
+   that embeds clang. Nothing here can decide that; it is a call about the
+   repository.
 
 7. **`clexport -map` still crashes** on a Debug map file, parsing 2,875
    character lines into 1,024 byte buffers. Pre-existing clReflect bug, worked
