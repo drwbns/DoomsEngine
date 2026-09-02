@@ -3,6 +3,7 @@
 
 #include "stdio.h"
 #include "assert.h"
+#include <cstdlib>
 
 #include <windows.h>
 #include <d3d11_1.h>
@@ -222,6 +223,10 @@ namespace dooms
             static  D3D_DRIVER_TYPE g_driverType = D3D_DRIVER_TYPE_NULL;
             static D3D_FEATURE_LEVEL g_featureLevel = D3D_FEATURE_LEVEL_11_0;
             static ID3D11Device* g_pd3dDevice = nullptr;
+
+            // The debug layer's message queue, when it is running. Null
+            // otherwise, which is the normal case.
+            static ID3D11InfoQueue* g_pInfoQueue = nullptr;
             static ID3D11Device1* g_pd3dDevice1 = nullptr;
             static ID3D11DeviceContext* g_pImmediateContext = nullptr;
             static  ID3D11DeviceContext1* g_pImmediateContext1 = nullptr;
@@ -789,6 +794,26 @@ namespace dooms
                 createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
+                // Also available in Release, on demand, by setting
+                // DOOMS_D3D11_DEBUG in the environment.
+                //
+                // Worth having because the interesting rendering work is
+                // measured in Release, and every misuse of this api was
+                // therefore invisible where it mattered: two of them shipped
+                // here unnoticed -- a failed input layout returned as though it
+                // were a handle, and UpdateSubresource called on a dynamic
+                // buffer. The layer names both instantly. It costs performance,
+                // so it stays off unless asked for.
+                //
+                // Requires the Graphics Tools feature to be installed; device
+                // creation fails without it, which is why the flag is dropped
+                // and retried rather than allowed to stop startup.
+                const bool bIsD3D11DebugRequested = (GetEnvironmentVariableA("DOOMS_D3D11_DEBUG", nullptr, 0) != 0);
+                if (bIsD3D11DebugRequested == true)
+                {
+                    createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+                }
+
                 D3D_DRIVER_TYPE driverTypes[] = // https://docs.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_driver_type
                 {
                     D3D_DRIVER_TYPE_HARDWARE,
@@ -820,8 +845,52 @@ namespace dooms
                     if (SUCCEEDED(hr))
                         break;
                 }
+
+                // Asked for the debug layer and did not get a device: almost
+                // always the Graphics Tools feature missing. Drop it rather
+                // than refuse to start, and say so, since a silently ignored
+                // request would look like a layer that found nothing.
+                if (FAILED(hr) && bIsD3D11DebugRequested == true)
+                {
+                    std::fprintf(stderr, "[D3D11] debug layer unavailable, continuing without it\n");
+                    std::fflush(stderr);
+
+                    createDeviceFlags &= ~static_cast<UINT>(D3D11_CREATE_DEVICE_DEBUG);
+
+                    for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++)
+                    {
+                        g_driverType = driverTypes[driverTypeIndex];
+                        hr = D3D11CreateDevice(nullptr, g_driverType, nullptr, createDeviceFlags, featureLevels, numFeatureLevels,
+                            D3D11_SDK_VERSION, &g_pd3dDevice, &g_featureLevel, &g_pImmediateContext);
+
+                        if (hr == E_INVALIDARG)
+                        {
+                            hr = D3D11CreateDevice(nullptr, g_driverType, nullptr, createDeviceFlags, &featureLevels[1], numFeatureLevels - 1,
+                                D3D11_SDK_VERSION, &g_pd3dDevice, &g_featureLevel, &g_pImmediateContext);
+                        }
+
+                        if (SUCCEEDED(hr))
+                            break;
+                    }
+                }
+
                 if (FAILED(hr))
                     return hr;
+
+                // Kept so the messages can be drained each frame; null when the
+                // layer is not running, which every use of it checks for.
+                if (g_pd3dDevice != nullptr)
+                {
+                    if (FAILED(g_pd3dDevice->QueryInterface(__uuidof(ID3D11InfoQueue), reinterpret_cast<void**>(&dx11::g_pInfoQueue))))
+                    {
+                        dx11::g_pInfoQueue = nullptr;
+                    }
+                    else
+                    {
+                        std::fprintf(stderr, "[D3D11] debug layer active\n");
+                        std::fflush(stderr);
+                    }
+                }
 
                 // Obtain DXGI factory from device (since we used nullptr for pAdapter above)
                 IDXGIFactory1* dxgiFactory = nullptr;
@@ -1358,6 +1427,58 @@ namespace dooms
 
 		}
 
+        // Prints whatever the debug layer has queued since the last frame.
+        //
+        // Drained here rather than exposed for the engine to call, so that
+        // turning the layer on is the only thing anyone has to do. Written to
+        // stderr unbuffered: the engine's own log is buffered, and on a crash
+        // its last line is wherever the buffer happened to end rather than
+        // where execution stopped, which is a lesson learned the slow way.
+        static void DrainD3D11DebugMessages()
+        {
+            if (dx11::g_pInfoQueue == nullptr)
+            {
+                return;
+            }
+
+            const UINT64 messageCount = dx11::g_pInfoQueue->GetNumStoredMessages();
+
+            for (UINT64 messageIndex = 0; messageIndex < messageCount; messageIndex++)
+            {
+                SIZE_T messageByteLength = 0;
+                if (FAILED(dx11::g_pInfoQueue->GetMessage(messageIndex, nullptr, &messageByteLength)) || messageByteLength == 0)
+                {
+                    continue;
+                }
+
+                D3D11_MESSAGE* const message = static_cast<D3D11_MESSAGE*>(std::malloc(messageByteLength));
+                if (message == nullptr)
+                {
+                    continue;
+                }
+
+                if (SUCCEEDED(dx11::g_pInfoQueue->GetMessage(messageIndex, message, &messageByteLength)))
+                {
+                    const char* severity = "INFO";
+                    switch (message->Severity)
+                    {
+                    case D3D11_MESSAGE_SEVERITY_CORRUPTION: severity = "CORRUPTION"; break;
+                    case D3D11_MESSAGE_SEVERITY_ERROR:      severity = "ERROR"; break;
+                    case D3D11_MESSAGE_SEVERITY_WARNING:    severity = "WARNING"; break;
+                    default: break;
+                    }
+
+                    std::fprintf(stderr, "[D3D11 %s] %.*s\n",
+                        severity, static_cast<int>(message->DescriptionByteLength), message->pDescription);
+                }
+
+                std::free(message);
+            }
+
+            dx11::g_pInfoQueue->ClearStoredMessages();
+            std::fflush(stderr);
+        }
+
         static void ClearInternalResource()
 		{
 			dx11::CleanUpDepthStencilStatePool();
@@ -1380,7 +1501,9 @@ namespace dooms
 
 		DOOMS_ENGINE_GRAPHICS_API void SwapBuffer() noexcept
 		{
-            dx11::g_pSwapChain->Present(dx11::SyncInterval, 0); // Swap Back buffer          
+            DrainD3D11DebugMessages();
+
+            dx11::g_pSwapChain->Present(dx11::SyncInterval, 0); // Swap Back buffer
             dx11::DrawCallCounter = 0;
 		}
 
