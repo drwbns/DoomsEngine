@@ -693,43 +693,38 @@ Ordered by what would change a decision, not by size.
 
 ### Performance, in measured order
 
-4. **Instancing.** Started, not landed. The work is on a git stash rather than
-   in a commit, because the engine crashes with it applied and the cause is not
-   yet known.
+4. **Instancing.** Built, correct, and off, because it wins nothing
+   measurable yet.
 
-   The ceiling is no longer a fit. At the shipped margin the geometry pass
-   issues 742.6 draws across 51 distinct mesh and material pairs, a 14.6x
-   collapse, with mesh binds already down at 15.7 -- so what is left to win is
-   the submission and its per draw constant buffer write, not the binding.
+   Correctness is not an opinion here: with it on the oracle counts 1.64532
+   million drawn pixels against 1.6451 million with it off, a hundredth of a
+   percent apart, so every object lands in the pixels it did before.
 
-   What is built and believed good:
+   It collapses 742.8 draws to 413.9. Not to the 51 the draw group count
+   promised: a run has to share a detail level as well as a mesh and a
+   material, since one draw carries one index buffer, and level of detail
+   splits each group about eight ways. `CullStatDrawGroupCount` therefore
+   overstates the ceiling whenever level of detail is on, which is worth
+   knowing before that number is quoted again.
 
-   - `DrawIndexedInstanced` in the D3D11 backend and a matching OpenGL entry,
-     threaded through the function pointer table. Verified exported unmangled,
-     so `GetProcAddress` resolves it.
-   - `Mesh::DrawInstanced` and `DrawInstancedWithLodBuffers`. Detail level has
-     to be part of what defines a run, since one draw carries one index buffer;
-     without that instancing would silently draw everything at full detail and
-     then look faster than what it is compared against.
-   - A per instance matrix buffer filled once per pass and drawn from in runs.
-   - The per instance input layout. This was the risk and it is retired:
-     `glslcc` emits four `vec4` inputs at locations 5 to 8 as TEXCOORD3 to 6 of
-     type float4, and D3D11 accepts a layout that puts all four on one slot as
-     `PER_INSTANCE` with step rate 1. Traced and confirmed accepted.
+   The geometry pass reads 1.505 ms against 1.447, noise in the wrong
+   direction -- and that timer could not show this win anyway. What instancing
+   saves is cpu submission, and nothing here times the geometry pass on the
+   cpu. **That timer is the next thing to build, not more instancing.**
+   Sorting by detail level as well as by mesh and material would raise the
+   collapse, if the cpu number ever says it is worth having.
 
-   What is not solved: with the whole thing applied the engine dies during
-   startup, after every input layout has reported success. Reverting only the
-   shader did not fix it, and short circuiting only the draw path did not fix
-   it, so it is neither of those alone. Two real bugs were found while looking
-   and are worth keeping regardless: `CreateInputLayoutForD3D` returned a
-   failed `HRESULT` as though it were a layout handle, which survives every
-   null check and faults far from its cause; and `UpdateDataToBuffer` writes
-   through `UpdateSubresource`, which D3D11 forbids on a dynamic buffer and
-   which writes the whole resource, so any caller passing a partially filled
-   source reads past the end of it.
+   The crash that cost most of a session was none of the things it looked
+   like. `DefaultGraphcisPipeLine` is a reflected class and this build loads a
+   prebuilt reflection database, so adding a member moves every offset that
+   database describes and the engine dies during startup, before the first
+   Present. Proven by adding one unused `unsigned long long`, touched by
+   nothing, and watching it die. The instance buffer state lives at file scope
+   in the .cpp now, which is what the draw loop already does with its own
+   scratch vectors.
 
-   Next attempt should start under the D3D11 debug layer or a debugger rather
-   than by bisecting a fifty second startup, which is what made this expensive.
+   **Do not add members to a reflected class while the reflection data is
+   prebuilt.** That is the general lesson and it is written down nowhere else.
 
 5. **Move the Hi-Z test onto the gpu.** Blocked: needs compute dispatch,
    unordered access views and indirect draw, none of which the backend has.

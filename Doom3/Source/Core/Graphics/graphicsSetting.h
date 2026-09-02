@@ -15,23 +15,24 @@ namespace dooms
 			// Mesh binds were already down at 15.7, so what is left to win is
 			// the submission itself rather than the binding around it.
 			//
-			// **Not finished, and not safe to switch on.** The submission side
-			// is here and works -- the buffer of per instance matrices, the
-			// runs, the instanced draw -- but the gbuffer vertex shader still
-			// reads its model matrix from a uniform block, so a run drawn
-			// through this path would put every object at the same transform.
+			// Works, and correct: with it on, the oracle counts 1.64532 million
+			// drawn pixels against 1.6451 million with it off, matching to a
+			// hundredth of a percent, so the geometry lands where it did.
 			//
-			// The shader half was written and reverted. Feeding the matrix
-			// through four vec4 vertex inputs round trips correctly: glslcc
-			// emits them at locations 5 to 8 as TEXCOORD3 to 6 of type float4,
-			// and D3D11 accepts the input layout built from that, per instance
-			// on its own slot. What is not solved is that the engine then
-			// crashed after asset loading, past the point where every input
-			// layout reported success, and finding that needs a debugger or
-			// the D3D11 debug layer rather than another guess.
+			// Off anyway, because no win has been measured. It collapses 742.8
+			// draws to 413.9 -- not to the 51 the draw group count suggests,
+			// because a run has to share a detail level as well as a mesh and
+			// a material, and level of detail splits each group about eight
+			// ways. The geometry pass reads 1.505 ms against 1.447, which is
+			// noise in the wrong direction, and that timer would not show a
+			// win anyway: what instancing saves is cpu submission, and nothing
+			// times the geometry pass on the cpu.
 			//
-			// Off by default so the two can be measured against each other,
-			// which is the only reason to have a toggle rather than a rewrite.
+			// So the next thing this needs is a cpu timer around submission,
+			// not more instancing. Two things would raise the collapse if it
+			// turns out to be worth it: sorting by detail level as well as by
+			// mesh and material, and noting that CullStatDrawGroupCount
+			// overstates the ceiling whenever level of detail is on.
 			extern inline bool IsInstancingEnabled{ false };
 
 			// How many draw calls the geometry pass actually issued, and how

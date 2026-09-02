@@ -8,6 +8,23 @@ layout (location = 2) in vec3 aNormal;
 layout (location = 3) in vec3 aTangent;
 layout (location = 4) in vec3 aBitangent;
 
+// The model matrix arrives per instance rather than in a uniform block, so
+// every object sharing this mesh and material can be drawn in one call.
+//
+// Read this way whether or not instancing is switched on: a draw of one
+// instance is still a draw of one instance. A shader that could take the
+// matrix from either place would need the unused path kept alive, or the
+// compiler strips these inputs and the reflection stops mentioning them --
+// and the reflection is what the D3D11 input layout is built from. The
+// toggle therefore changes how many objects a draw carries, not this file.
+//
+// These are columns. mat4(a, b, c, d) builds from columns, and the matrix
+// uploaded per instance is column major in memory, so the two agree.
+layout (location = 5) in vec4 aInstanceModelColumn0;
+layout (location = 6) in vec4 aInstanceModelColumn1;
+layout (location = 7) in vec4 aInstanceModelColumn2;
+layout (location = 8) in vec4 aInstanceModelColumn3;
+
 layout (location = 1) out vec3 UV0; // All in, out variable should have layout (location = ?) option
 layout (location = 2) out vec3 FragPos;
 layout (location = 3) out mat3 TBN;
@@ -50,14 +67,22 @@ layout(binding = 1, std140) uniform ModelData
 
 void main()
 {
+    const mat4 instanceModel = mat4
+    (
+        aInstanceModelColumn0,
+        aInstanceModelColumn1,
+        aInstanceModelColumn2,
+        aInstanceModelColumn3
+    );
+
 	UV0 = aUV0;
-	FragPos = vec3(model * vec4(aPos, 1.0));
-        
-    vec3 N = normalize(mat3(model) * aNormal);
-    vec3 T = normalize(mat3(model) * aTangent);
+	FragPos = vec3(instanceModel * vec4(aPos, 1.0));
+
+    vec3 N = normalize(mat3(instanceModel) * aNormal);
+    vec3 T = normalize(mat3(instanceModel) * aTangent);
     T = normalize(T - dot(N, T) * N);
     // vec3 B = cross(N, T);
-    vec3 B = normalize(mat3(model) * aBitangent);
+    vec3 B = normalize(mat3(instanceModel) * aBitangent);
 
     // TBN must form a right handed coord system.
     // Some models have symetric UVs. Check and fix.

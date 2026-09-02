@@ -594,6 +594,7 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 		// ceiling on what instancing could collapse, and it is free to carry
 		// here rather than reading it off a panel later.
 		mHiZMarginSweepAccumulator.mDrawGroupCount += graphicsSetting::CullStatDrawGroupCount;
+		mHiZMarginSweepAccumulator.mInstancedDrawCallCount += graphicsSetting::CullStatInstancedDrawCallCount;
 		mHiZMarginSweepAccumulator.mMeshBindCount += graphicsSetting::CullStatMeshBindCount;
 		mHiZMarginSweepAccumulator.mIndexCount += static_cast<double>(graphicsSetting::CullStatIndexCount);
 
@@ -616,7 +617,7 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 			if (sweepResult.mCompletedStep == 0)
 			{
 				sweepFile << "margin,grid,drawn,false_culls,false_cull_tested,wasted,oracle_tested,hiz_cpu_ms,geometry_gpu_ms,"
-					"false_cull_px,worst_false_cull_px,drawn_px,draw_groups,mesh_binds,index_count\n";
+					"false_cull_px,worst_false_cull_px,drawn_px,draw_groups,mesh_binds,index_count,instanced_draws\n";
 			}
 
 			sweepFile << measuredMargin << ','
@@ -633,7 +634,8 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 				<< (mHiZMarginSweepAccumulator.mDrawnPixelCount / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mDrawGroupCount / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mMeshBindCount / frameCount) << ','
-				<< (mHiZMarginSweepAccumulator.mIndexCount / frameCount) << '\n';
+				<< (mHiZMarginSweepAccumulator.mIndexCount / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mInstancedDrawCallCount / frameCount) << '\n';
 		}
 
 		D_RELEASE_LOG(eLogType::D_LOG,
