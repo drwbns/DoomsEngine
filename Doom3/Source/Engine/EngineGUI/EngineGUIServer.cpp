@@ -20,6 +20,7 @@
 #include <IO/UserInput_Server.h>
 #include <Graphics/GraphicsAPI/graphicsAPISetting.h>
 #include <Graphics/graphicsSetting.h>
+#include <EngineConfigurationData/ConfigData.h>
 
 #include <DObject/DObjectGlobals.h>
 #include <Rendering/Pipeline/GraphicsPipeLine.h>
@@ -725,17 +726,45 @@ void dooms::ui::EngineGUIServer::PreRender()
 
         if (bHasSyncedOcclusionMode)
         {
-            // Then move it to the configuration this harness measured as the
-            // best of the ones it can produce. config.ini boots into frustum
-            // plus software occlusion; Hi-Z culls more of the scene for a fifth
-            // of the cpu, which was measured on identical frozen frames with
-            // the rendered output verified the same.
+            // Then apply the mode the configuration asks for.
             //
-            // Deliberately imposed rather than inherited. Everything else the
-            // interface shows is read back from the engine, but a harness whose
-            // default is worse than the best it knows about is not a useful
-            // starting point.
-            ApplyOcclusionModeIndex(gBestMeasuredOcclusionModeIndex);
+            // This used to impose Hi-Z in code over whatever config.ini said,
+            // on the grounds that a harness should not start worse than the
+            // best it knows about. The default is still Hi-Z and it is still
+            // the fastest of the four measured -- 2.8 ms a frame against 3.0
+            // for software occlusion, Release, both rendering the same image
+            // -- but it lives in the file now. Overriding the file silently
+            // made every MASKED_OC setting in it look inert, and a harness
+            // whose configuration file does not configure anything is worse
+            // than one that starts a technique behind.
+            // DOOMS_OCCLUSION_MODE overrides which one, so the modes can be
+            // compared from a script instead of a keyboard. Out of range
+            // values are ignored rather than clamped, since silently
+            // measuring a different mode than was asked for is the failure
+            // this whole harness exists to avoid.
+            INT32 bootModeIndex = gBestMeasuredOcclusionModeIndex;
+
+            const INT32 configuredModeIndex = static_cast<INT32>(
+                ConfigData::GetSingleton()->GetConfigData().GetValue<INT64>("Graphics", "OCCLUSION_MODE"));
+
+            if ((configuredModeIndex >= 0) && (configuredModeIndex < gOcclusionModeCount))
+            {
+                bootModeIndex = configuredModeIndex;
+            }
+
+            char requestedMode[16] = {};
+            size_t requestedModeLength = 0;
+            if ((getenv_s(&requestedModeLength, requestedMode, sizeof(requestedMode), "DOOMS_OCCLUSION_MODE") == 0) &&
+                (requestedModeLength > 0))
+            {
+                const INT32 parsedIndex = std::atoi(requestedMode);
+                if ((parsedIndex >= 0) && (parsedIndex < gOcclusionModeCount))
+                {
+                    bootModeIndex = parsedIndex;
+                }
+            }
+
+            ApplyOcclusionModeIndex(bootModeIndex);
         }
     }
 

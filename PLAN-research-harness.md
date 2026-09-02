@@ -560,11 +560,39 @@ already points.
 Off by default, each because it was measured and lost: the depth pre pass, the
 polygon outline, and BVH frustum culling.
 
-The culling mode is the one thing here imposed rather than read back. config.ini
-boots into frustum plus software occlusion, and everything else the interface
-shows is whatever the engine actually has, deliberately. A harness that starts
-worse than the best it knows about is not a useful starting point, so this one
-setting is applied over the file.
+The culling mode used to be the one thing imposed rather than read back: the
+interface applied Hi-Z over whatever config.ini said, on the grounds that a
+harness should not start worse than the best it knows about. It is an
+`OCCLUSION_MODE` key in config.ini now, defaulting to 3.
+
+The default did not change, because measuring it upheld it -- but only just,
+and not for the stated reason. Hi-Z against software occlusion in Release, both
+rendering the same image:
+
+| mode | frame | gpu busy | Hi-Z cpu |
+|------|-------|----------|----------|
+| frustum + software occlusion | 3.0 ms | 2.53 ms | 1.07 ms |
+| frustum + Hi-Z               | 2.8 ms | 2.90 ms | 0.62 ms |
+
+About seven percent, not the "fifth of the cpu" the Debug measurement claimed,
+and that claim was what justified overriding the file. This pairing had never
+been re-measured in Release even though three of the five techniques that were
+re-measured inverted.
+
+Overriding silently was the real problem: it made every `MASKED_OC` setting in
+config.ini look inert, since changing them changed nothing. A harness whose
+configuration file does not configure anything is worse than one that starts a
+technique behind. `DOOMS_OCCLUSION_MODE` overrides the key for scripted
+comparisons.
+
+**One caveat on those numbers.** The modes do not isolate as cleanly as their
+names suggest: the Hi-Z *hull* occludee test is gated on
+`IsHiZHullOccludeeEnabled` rather than on the mode, so it runs in every mode,
+which is why the Hi-Z cpu column is 1.07 ms even with Hi-Z culling switched
+off. The comparison above is therefore software-occlusion-plus-hull against
+Hi-Z-plus-hull. That is a fair comparison of what the engine actually runs in
+each mode, but it is not a clean comparison of the two techniques, and the mode
+table should probably own the hull toggle.
 
 ## Where the frame actually goes
 
