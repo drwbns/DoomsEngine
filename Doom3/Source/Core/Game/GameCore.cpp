@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cstdio>
 #include "GameCore.h"
+#include <Game/StartupTiming.h>
 
 #include <Rendering/Graphics_Server.h>
 
@@ -121,6 +122,11 @@ namespace
 	// thousands of lines deep before the window is even interactive.
 	void WriteStartupLine(const char* const text)
 	{
+		if (dooms::IsStartupTimingEnabled() == false)
+		{
+			return;
+		}
+
 		FILE* file = nullptr;
 		if (fopen_s(&file, "startup_timing.txt", "a") == 0 && file != nullptr)
 		{
@@ -145,7 +151,12 @@ namespace
 
 void dooms::GameCore::Init()
 {
-	std::remove("startup_timing.txt");
+	// Only when the timings are actually being collected, so a shipped run
+	// neither writes the file nor deletes one somebody left there.
+	if (dooms::IsStartupTimingEnabled() == true)
+	{
+		std::remove("startup_timing.txt");
+	}
 
 	const std::chrono::steady_clock::time_point wholeStartupStart = std::chrono::steady_clock::now();
 

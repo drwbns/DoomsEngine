@@ -779,9 +779,14 @@ Ordered by what would change a decision, not by size.
    around by running clexport without `-map`, which loses function call
    addresses.
 
-8. **The startup timing instrumentation is permanent.** It writes
-   `startup_timing.txt` on every run. Harmless and useful, but it is debug
-   output living in `GameCore::Init` and should probably be behind a flag.
+8. ~~**The startup timing instrumentation is permanent.**~~ **Done.** It now
+   writes `startup_timing.txt` only when `DOOMS_STARTUP_TIMING` is set in the
+   environment, and deletes a stale file only when it is about to write one.
+
+   An environment variable rather than a config key because the first phase
+   being timed is the one that reads the config: by the time a key could be
+   consulted, the measurement it would gate has already happened. Verified
+   both ways -- no file on a default run, the timings present when asked.
 
 
 ## Deliberately out of scope

@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <chrono>
 #include "ReflectionManager.h"
+#include <Game/StartupTiming.h>
 
 #include "EngineConfigurationData/ConfigData.h"
 
@@ -163,6 +164,11 @@ void dooms::reflection::ReflectionManager::Initialize()
 		// to, since the in engine log is unreadable during start up.
 		const auto ReportReflectionPhase = [](const char* const phaseName, const std::chrono::steady_clock::time_point start)
 		{
+			if (dooms::IsStartupTimingEnabled() == false)
+			{
+				return;
+			}
+
 			const double elapsedMilliseconds =
 				std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
 					std::chrono::steady_clock::now() - start).count();
