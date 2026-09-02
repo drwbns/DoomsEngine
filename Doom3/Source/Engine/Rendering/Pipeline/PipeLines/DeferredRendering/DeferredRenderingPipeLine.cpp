@@ -597,6 +597,8 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 		mHiZMarginSweepAccumulator.mInstancedDrawCallCount += graphicsSetting::CullStatInstancedDrawCallCount;
 		mHiZMarginSweepAccumulator.mGeometryPassCpuMilliseconds += graphicsSetting::CpuStatGeometryPassMilliseconds;
 		mHiZMarginSweepAccumulator.mDrawSubmissionMilliseconds += graphicsSetting::CpuStatDrawSubmissionMilliseconds;
+		mHiZMarginSweepAccumulator.mFrameMilliseconds += graphicsSetting::CpuStatFrameMilliseconds;
+		mHiZMarginSweepAccumulator.mPreRenderMilliseconds += graphicsSetting::CpuStatPreRenderRendererMilliseconds;
 		mHiZMarginSweepAccumulator.mMeshBindCount += graphicsSetting::CullStatMeshBindCount;
 		mHiZMarginSweepAccumulator.mIndexCount += static_cast<double>(graphicsSetting::CullStatIndexCount);
 
@@ -620,7 +622,7 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 			{
 				sweepFile << "margin,grid,drawn,false_culls,false_cull_tested,wasted,oracle_tested,hiz_cpu_ms,geometry_gpu_ms,"
 					"false_cull_px,worst_false_cull_px,drawn_px,draw_groups,mesh_binds,index_count,instanced_draws,"
-					"geo_cpu_ms,submit_cpu_ms\n";
+					"geo_cpu_ms,submit_cpu_ms,frame_ms,prerender_cpu_ms\n";
 			}
 
 			sweepFile << measuredMargin << ','
@@ -640,7 +642,9 @@ void dooms::graphics::DeferredRenderingPipeLine::TickHiZMarginSweep(dooms::Camer
 				<< (mHiZMarginSweepAccumulator.mIndexCount / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mInstancedDrawCallCount / frameCount) << ','
 				<< (mHiZMarginSweepAccumulator.mGeometryPassCpuMilliseconds / frameCount) << ','
-				<< (mHiZMarginSweepAccumulator.mDrawSubmissionMilliseconds / frameCount) << '\n';
+				<< (mHiZMarginSweepAccumulator.mDrawSubmissionMilliseconds / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mFrameMilliseconds / frameCount) << ','
+				<< (mHiZMarginSweepAccumulator.mPreRenderMilliseconds / frameCount) << '\n';
 		}
 
 		D_RELEASE_LOG(eLogType::D_LOG,
@@ -1947,6 +1951,53 @@ void dooms::graphics::DeferredRenderingPipeLine::CameraRender(dooms::Camera* con
 	if (targetCamera->IsMainCamera() == true)
 	{
 		TickHiZMarginSweep(targetCamera);
+
+		// The frame budget, on demand, for a frame the sweep is not touching.
+		//
+		// The sweep forces the visibility oracle on, and the oracle redraws
+		// the whole scene inside occlusion queries, so a budget taken during a
+		// sweep says more about the oracle than about the engine. This prints
+		// the same figures from an ordinary frame.
+		static bool bIsFrameBudgetRequested = []()
+		{
+			size_t requiredSize = 0;
+			return (getenv_s(&requiredSize, nullptr, 0, "DOOMS_FRAME_BUDGET") == 0) && (requiredSize > 0);
+		}();
+
+		if (bIsFrameBudgetRequested == true)
+		{
+			static UINT64 budgetFrameCounter = 0;
+
+			// Throttled, and skipping the first stretch, so the numbers come
+			// from a settled frame rather than one still loading.
+			budgetFrameCounter++;
+			if ((budgetFrameCounter > 240) && ((budgetFrameCounter % 120) == 0))
+			{
+				const FLOAT32 accountedCpu =
+					graphicsSetting::CpuStatPreRenderRendererMilliseconds +
+					graphicsSetting::CpuStatBVHCullMilliseconds +
+					graphicsSetting::CpuStatHiZTestMilliseconds +
+					graphicsSetting::CpuStatGeometryPassMilliseconds;
+
+				const FLOAT32 accountedGpu =
+					graphicsSetting::GpuStatHiZBuildMilliseconds +
+					graphicsSetting::GpuStatDepthPrePassMilliseconds +
+					graphicsSetting::GpuStatGeometryPassMilliseconds;
+
+				std::fprintf(stderr,
+					"[BUDGET] frame %.3f ms | cpu known %.3f (prerender %.3f, hiz %.3f, geometry %.3f) "
+					"| cpu elsewhere %.3f | gpu known %.3f | oracle %s\n",
+					graphicsSetting::CpuStatFrameMilliseconds,
+					accountedCpu,
+					graphicsSetting::CpuStatPreRenderRendererMilliseconds,
+					graphicsSetting::CpuStatHiZTestMilliseconds,
+					graphicsSetting::CpuStatGeometryPassMilliseconds,
+					graphicsSetting::CpuStatFrameMilliseconds - accountedCpu,
+					accountedGpu,
+					graphicsSetting::IsVisibilityOracleEnabled ? "on" : "off");
+				std::fflush(stderr);
+			}
+		}
 	}
 
 	// Overdraw gets its own pass over the scene. It forces every renderer onto a

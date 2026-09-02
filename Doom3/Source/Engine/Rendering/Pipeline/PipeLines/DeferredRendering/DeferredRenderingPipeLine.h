@@ -230,6 +230,8 @@ namespace dooms
 				double mInstancedDrawCallCount{ 0.0 };
 				double mGeometryPassCpuMilliseconds{ 0.0 };
 				double mDrawSubmissionMilliseconds{ 0.0 };
+				double mFrameMilliseconds{ 0.0 };
+				double mPreRenderMilliseconds{ 0.0 };
 				double mMeshBindCount{ 0.0 };
 				double mIndexCount{ 0.0 };
 				double mOracleInvisibleCount{ 0.0 };

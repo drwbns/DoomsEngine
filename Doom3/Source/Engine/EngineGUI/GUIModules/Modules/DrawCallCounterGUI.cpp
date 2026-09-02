@@ -240,6 +240,41 @@ void dooms::ui::DrawCallCounterGUI::Render()
 		// the tree is on would hide what turning the tree on actually did.
 		ImGui::Text("PreRender  : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatPreRenderRendererMilliseconds);
 
+		// The denominator for everything above.
+		//
+		// Cpu and gpu are kept apart on purpose: they run at the same time, so
+		// adding them together would invent work that never happened. Each is
+		// shown against the frame, and what is left over is the honest measure
+		// of how much of this engine is still unmeasured -- which is the number
+		// that should decide what gets optimised next, rather than whichever
+		// technique sounds most interesting.
+		if (dooms::graphics::graphicsSetting::CpuStatFrameMilliseconds > 0.0f)
+		{
+			const float frameMilliseconds = dooms::graphics::graphicsSetting::CpuStatFrameMilliseconds;
+
+			const float accountedCpuMilliseconds =
+				dooms::graphics::graphicsSetting::CpuStatPreRenderRendererMilliseconds +
+				dooms::graphics::graphicsSetting::CpuStatBVHCullMilliseconds +
+				dooms::graphics::graphicsSetting::CpuStatHiZTestMilliseconds +
+				dooms::graphics::graphicsSetting::CpuStatGeometryPassMilliseconds;
+
+			const float accountedGpuMilliseconds =
+				dooms::graphics::graphicsSetting::GpuStatHiZBuildMilliseconds +
+				dooms::graphics::graphicsSetting::GpuStatDepthPrePassMilliseconds +
+				dooms::graphics::graphicsSetting::GpuStatGeometryPassMilliseconds;
+
+			ImGui::Separator();
+			ImGui::Text("Frame      : %.3f ms  (%.0f fps)", frameMilliseconds,
+				(frameMilliseconds > 0.0f) ? (1000.0f / frameMilliseconds) : 0.0f);
+			ImGui::Text("  cpu known: %.3f ms (%.0f%%), %.3f elsewhere",
+				accountedCpuMilliseconds,
+				100.0f * accountedCpuMilliseconds / frameMilliseconds,
+				frameMilliseconds - accountedCpuMilliseconds);
+			ImGui::Text("  gpu known: %.3f ms (%.0f%% of frame)",
+				accountedGpuMilliseconds,
+				100.0f * accountedGpuMilliseconds / frameMilliseconds);
+		}
+
 		if (dooms::graphics::graphicsSetting::IsBVHFrustumCullingEnabled)
 		{
 			ImGui::Text("BVH cull   : %.3f ms (CPU)", dooms::graphics::graphicsSetting::CpuStatBVHCullMilliseconds);

@@ -2,6 +2,7 @@
 #include <cstdio>
 #include "GameCore.h"
 #include <Game/StartupTiming.h>
+#include <Graphics/graphicsSetting.h>
 
 #include <Rendering/Graphics_Server.h>
 
@@ -262,6 +263,25 @@ void dooms::GameCore::LateInit()
 
 void dooms::GameCore::Update()
 {
+	// Measured here rather than around the render, so it includes everything a
+	// frame actually costs: input, game logic, the present, and any wait.
+	{
+		static std::chrono::steady_clock::time_point previousFrameStart;
+		static bool bHasPreviousFrame = false;
+
+		const std::chrono::steady_clock::time_point frameStart = std::chrono::steady_clock::now();
+
+		if (bHasPreviousFrame == true)
+		{
+			graphics::graphicsSetting::CpuStatFrameMilliseconds = static_cast<FLOAT32>(
+				std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
+					frameStart - previousFrameStart).count());
+		}
+
+		previousFrameStart = frameStart;
+		bHasPreviousFrame = true;
+	}
+
 	UpdateGameCore();
 
 	D_START_PROFILING(mUserImput_Server_Update, eProfileLayers::CPU);

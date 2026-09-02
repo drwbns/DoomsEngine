@@ -151,6 +151,22 @@ namespace dooms
 			extern inline float CpuStatGeometryPassMilliseconds{ 0.0f };
 			extern inline float CpuStatDrawSubmissionMilliseconds{ 0.0f };
 
+			// Wall time between one frame and the next.
+			//
+			// The denominator every other timer here was missing. Seven of
+			// them report milliseconds and none of them said what a
+			// millisecond is worth, so a pass taking 1.45 ms could have been
+			// half the frame or a tenth of it and nothing on screen
+			// distinguished those.
+			//
+			// This matters more than it sounds. Two techniques were pursued
+			// this far on the strength of numbers that turned out to be
+			// fractions of a percent of a frame -- instancing at 0.023 ms and
+			// the Hi-Z staleness margin at 0.09% of drawn pixels -- and a
+			// budget line would have said so before either was built rather
+			// than after.
+			extern inline float CpuStatFrameMilliseconds{ 0.0f };
+
 			// Skip rewriting an entity's culling data when its transform did not
 			// move. A toggle rather than an unconditional change, so the saving
 			// can be read off rather than asserted.

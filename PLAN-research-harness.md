@@ -566,6 +566,53 @@ shows is whatever the engine actually has, deliberately. A harness that starts
 worse than the best it knows about is not a useful starting point, so this one
 setting is applied over the file.
 
+## Where the frame actually goes
+
+Seven timers reported milliseconds and none of them said what a millisecond was
+worth. There is a frame timer now, and the answer changes what is worth doing.
+
+A settled frame at the spawn view, oracle off, Release:
+
+| | ms | share of a 2.7 ms frame |
+|-----------------------|-------|------|
+| **gpu busy**          | **2.05** | **76%** |
+| cpu accounted         | 1.52  | 56% |
+| &nbsp;&nbsp;Hi-Z test | 0.82  | 30% |
+| &nbsp;&nbsp;PreRender | 0.40  | 15% |
+| &nbsp;&nbsp;geometry submission | 0.32 | 12% |
+| cpu elsewhere         | 1.18  | 44% |
+
+Cpu and gpu are listed separately because they overlap; adding them would
+invent work that never happened.
+
+**The frame is close to gpu bound.** The gpu is busy for 2.05 of 2.7 ms, so
+even driving cpu cost to zero could not take the frame below about 2 ms. At
+most 0.65 ms of the frame is available to cpu work at all -- and instancing,
+pursued for most of a session, returned 0.023 ms of it. Three and a half
+percent of the only headroom that existed.
+
+That is the reading which should have come first. It is cheap: one timestamp
+per frame and a subtraction.
+
+Three things follow.
+
+- **The largest measured cpu cost is the Hi-Z test, at 0.82 ms, thirty percent
+  of the frame.** Nothing else on the cpu is close. If cpu time is worth
+  attacking, it is that, not draw submission.
+- **The largest single quantity in the table is `cpu elsewhere`, 1.18 ms**,
+  which is everything the engine does that no timer covers. It is bigger than
+  every measured cpu item combined. Naming it is probably worth more than
+  optimising anything already named.
+- **Frame time is gpu shaped**, so overdraw and triangle count are where the
+  frame actually is. That is what level of detail and the culling techniques
+  address, and it is why they were the items that paid.
+
+`DOOMS_FRAME_BUDGET` prints these lines from an ordinary frame. It has to be an
+ordinary frame: the margin sweep forces the visibility oracle on, and the
+oracle redraws the whole scene inside occlusion queries, which put the same
+measurement at 5.15 ms with 3.4 ms unaccounted. That number described the
+oracle, not the engine.
+
 ## Next
 
 Ordered by what would change a decision, not by size.
