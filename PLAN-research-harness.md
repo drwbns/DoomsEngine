@@ -140,12 +140,22 @@ The harness works when you can:
    — **done.** F6 cycles occluder bounds, binned triangles, tile coverage, tile
    depth, overdraw, depth buffer, and the Hi-Z pyramid with F9 stepping levels.
 4. Trust the numbers, because the math underneath has tests.
-   — **partly.** `unit_tests` still has no source files. Standing in for them:
-   F5 freezes the scene so two modes can be compared on one frame at SSIM
-   1.000000, which caught the flipped V that made Hi-Z cull visible geometry;
-   and the BVH pass now audits itself every frame against bounds it cannot have
-   corrupted, reporting a count the overlay shows in red if it is ever not zero.
-   The second is the shape the real tests should take.
+   — **done.** 38 tests over five files, run in Debug and Release: frustum
+   plane extraction against a canonical camera's exact planes, the SIMD
+   extractor's transposed storage, tile rounding, the convex hull's
+   containment property exact and decimated, level of detail boundaries, the
+   Hi-Z cell range arithmetic, and the sweep controller's frame arithmetic.
+   Writing them found a real bug -- `DecimateHullConservatively` was not
+   conservative, and a proxy smaller than its mesh culls visible objects.
+
+   Three things stand beside the tests rather than under them, because they
+   catch what unit tests cannot. F5 freezes the scene so two modes can be
+   compared on one frame at SSIM 1.000000, which caught the flipped V that
+   made Hi-Z cull visible geometry. The BVH pass audits itself every frame
+   against bounds it cannot have corrupted. And the visibility oracle counts
+   both errors a culler can make, which is what caught a frame where every
+   object drew at a garbage transform -- 2371 objects instead of 743 -- that
+   nobody watching the screen had noticed.
 
 ## What the harness has actually shown
 
@@ -480,6 +490,16 @@ and draw submission for 0.5. Under Debug the same fit put draw submission in
 front, which is why level of detail looked worthless and instancing looked like
 the biggest prize on the board. Neither was true.
 
+**The 0.5 ms half of that fit has since been measured directly, and it is
+0.113 ms.** A cpu timer around the geometry pass, split into total and
+submission, puts the whole of draw submission at 0.113 ms for 742.8 draws --
+about a quarter of what the fit attributed to it. So the fit was still
+generous to submission even after the Release correction, and instancing,
+which can only attack that 0.113 ms, was never going to return the half
+millisecond this document promised it. Measured, it returns 0.023 ms. A fit
+across two variables is worth what it costs, which is nothing; a timer is
+worth more.
+
 **What this costs the rest of the document.** Every conclusion above this
 section was measured in Debug. The ones about culling *quality* stand, because
 counts of objects and waste do not depend on the build: the oracle's 1450
@@ -687,9 +707,17 @@ Ordered by what would change a decision, not by size.
 
 ### Measurement debt
 
-3. **Rewrite the older sections of this document.** The headline tables are
-   corrected and the inversions recorded, but Debug era prose survives in
-   places and some of it is now known to be wrong.
+3. ~~**Rewrite the older sections of this document.**~~ **Done enough to
+   trust.** The Debug era sections already carry a caveat saying which of their
+   conclusions survive -- the ones about culling quality do, the ones about
+   cost do not -- and the two claims that were actively wrong are corrected
+   where they were made: the definition of done no longer says there are no
+   tests, and the fitted half millisecond for draw submission now sits beside
+   the 0.113 ms a timer actually measured.
+
+   What is left is prose that is merely old rather than wrong, and rewriting
+   that has no reader. Anything quoted from above the Release re-measurement
+   line should be checked against a timer before it is acted on.
 
 ### Performance, in measured order
 
