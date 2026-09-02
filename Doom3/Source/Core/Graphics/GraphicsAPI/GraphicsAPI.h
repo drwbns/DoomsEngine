@@ -800,6 +800,23 @@ namespace dooms
 					);
 			extern GRAPHICS_DRAWINDEXED DrawIndexed;
 
+			/// <summary>
+			/// One draw carrying many copies of the same mesh, each reading its
+			/// own model matrix from a per instance vertex stream.
+			///
+			/// startInstanceLocation is where in that stream this draw's
+			/// instances begin, so one buffer holding every object in the frame
+			/// can be filled once and drawn from in runs.
+			/// </summary>
+			typedef void (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_DRAWINDEXEDINSTANCED)
+				(
+					const ePrimitiveType primitiveType,
+					const unsigned long long indiceCount,
+					const unsigned int instanceCount,
+					const unsigned int startInstanceLocation
+					);
+			extern GRAPHICS_DRAWINDEXEDINSTANCED DrawIndexedInstanced;
+
 			typedef unsigned long long (DOOMS_ENGINE_API_ENTRY_P GRAPHICS_CREATEMATERIAL)();
 			extern GRAPHICS_CREATEMATERIAL CreateMaterial;
 

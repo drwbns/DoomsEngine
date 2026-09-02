@@ -81,7 +81,18 @@ void dooms::MeshRenderer::Draw()
 	D_ASSERT(mTargetMaterial);
 	if (IsValid(mTargetMaterial) && (graphics::graphicsSetting::IsSkipPerDrawUboWriteEnabled == false))
 	{
-		GetMaterial()->GetUniformBufferObjectViewFromUBOName("ModelData")->SetMat4x4(graphics::eUniformLocation::ModelMatrix, GetTransform()->GetModelMatrix());
+		// Null when the bound shader takes its model matrix per instance
+		// instead of from a uniform block, in which case the block is unused,
+		// the compiler drops it and the reflection never mentions it. The
+		// depth only and batched paths still have one, so this cannot simply
+		// go away.
+		graphics::UniformBufferObjectView* const modelDataView =
+			GetMaterial()->GetUniformBufferObjectViewFromUBOName("ModelData");
+
+		if (modelDataView != nullptr)
+		{
+			modelDataView->SetMat4x4(graphics::eUniformLocation::ModelMatrix, GetTransform()->GetModelMatrix());
+		}
 	}
 	D_ASSERT(IsValid(mTargetMesh));
 	if (IsValid(mTargetMesh))

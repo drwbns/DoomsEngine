@@ -11,6 +11,7 @@
 #include "Utility/ShaderAsset/shaderConverter.h"
 #include <Rendering/Buffer/UniformBufferObject/UniformBufferObjectManager.h>
 #include <Graphics/GraphicsAPI/Manager/GraphicsAPIManager.h>
+#include <Graphics/graphicsSetting.h>
 
 
 dooms::asset::ShaderTextData::ShaderTextData()
@@ -530,13 +531,22 @@ void dooms::asset::ShaderAsset::CreateInputLayoutForD3D(dooms::asset::ShaderAsse
 
 			for (const asset::shaderReflectionDataParser::ShaderInputType& input : vertexShaderReflectionData.mInputVariables)
 			{
+				// Vertex inputs each get their own buffer slot, which is what
+				// the mesh binds against. Per instance inputs are the exception:
+				// the four rows of a model matrix are one buffer, so they share
+				// a slot and let DirectX append them at 0, 16, 32 and 48. A
+				// slot per row would mean binding the same buffer four times at
+				// four offsets to say the same thing.
+				const bool bIsInstanceInput =
+					(input.mName.rfind(graphics::graphicsSetting::INSTANCE_SHADER_INPUT_NAME_PREFIX, 0) == 0);
+
 				layout[input.mLocation].SemanticName = input.mSemanticType.c_str();
 				layout[input.mLocation].SemanticIndex = input.mSemanticIndex;
 				layout[input.mLocation].Format = graphics::dx11::Conver_From_eShaderVariableType_To_DXGI_FORMAT(input.mType);
-				layout[input.mLocation].InputSlot = input.mLocation;
+				layout[input.mLocation].InputSlot = bIsInstanceInput ? graphics::graphicsSetting::INSTANCE_VERTEX_BUFFER_SLOT : input.mLocation;
 				layout[input.mLocation].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT; // direct x choose offset itself
-				layout[input.mLocation].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-				layout[input.mLocation].InstanceDataStepRate = 0;
+				layout[input.mLocation].InputSlotClass = bIsInstanceInput ? D3D11_INPUT_PER_INSTANCE_DATA : D3D11_INPUT_PER_VERTEX_DATA;
+				layout[input.mLocation].InstanceDataStepRate = bIsInstanceInput ? 1 : 0;
 			}
 
 			mInputLayoutForD3D = dooms::graphics::GraphicsAPI::CreateInputLayoutForD3D
@@ -545,7 +555,18 @@ void dooms::asset::ShaderAsset::CreateInputLayoutForD3D(dooms::asset::ShaderAsse
 				vertexShaderReflectionData.mInputVariables.size(),
 				GetShaderObject(graphics::GraphicsAPI::eGraphicsPipeLineStage::VERTEX_SHADER)
 			);
-			D_ASSERT(mInputLayoutForD3D.IsValid());
+
+
+			// Worth saying out loud rather than only asserting: a rejected
+			// layout leaves the shader unusable in a way that only shows up
+			// as a crash or an empty screen much later.
+			if (mInputLayoutForD3D.IsValid() == false)
+			{
+				D_RELEASE_LOG(eLogType::D_ERROR,
+					"Failed to create D3D input layout ( Shader Asset : %s, %llu input variables )",
+					shaderAsset->GetAssetPathAsUTF8Str().c_str(),
+					static_cast<unsigned long long>(vertexShaderReflectionData.mInputVariables.size()));
+			}
 		}
 	}
 }

@@ -156,6 +156,7 @@ void dooms::graphics::GraphicsAPILoader::FetchExportedFunctionAddress()
 	dooms::graphics::GraphicsAPI::Draw = (GraphicsAPI::GRAPHICS_DRAW)GetProcAddress(hModule, "Draw");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::Draw != nullptr);
 	dooms::graphics::GraphicsAPI::DrawIndexed = (GraphicsAPI::GRAPHICS_DRAWINDEXED)GetProcAddress(hModule, "DrawIndexed");
+	dooms::graphics::GraphicsAPI::DrawIndexedInstanced = (GraphicsAPI::GRAPHICS_DRAWINDEXEDINSTANCED)GetProcAddress(hModule, "DrawIndexedInstanced");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::DrawIndexed != nullptr);
 	dooms::graphics::GraphicsAPI::EnableVertexAttributeArrayIndex = (GraphicsAPI::GRAPHICS_ENABLEVERTEXATTRIBUTEARRAYINDEX)GetProcAddress(hModule, "EnableVertexAttributeArrayIndex");
 	//D_ASSERT(dooms::graphics::GraphicsAPI::EnableVertexAttributeArrayIndex != nullptr);

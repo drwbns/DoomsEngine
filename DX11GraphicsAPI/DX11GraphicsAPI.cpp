@@ -2798,9 +2798,17 @@ namespace dooms
                 );
 
                 assert(FAILED(hr) == false);
+
+                // Returning hr here handed the caller a negative HRESULT as
+                // though it were a layout pointer, which then survives every
+                // null check and faults the first time anything binds it. In
+                // Release, where the assert above is gone, that turned a
+                // rejected layout into a crash a long way from its cause.
                 if (FAILED(hr))
-                    return hr;
-                
+                {
+                    return 0;
+                }
+
                 return reinterpret_cast<unsigned long long>(vertexLayout);
             }
             else
@@ -3022,6 +3030,30 @@ namespace dooms
             assert((unsigned int)primitiveType < GraphicsAPI::ePrimitiveType::END);
 
             dx11::SetPrimitiveTopology(primitiveType); dx11::g_pImmediateContext->DrawIndexed(indiceCount, 0, 0);
+            dx11::DrawCallCounter++;
+        }
+
+        DOOMS_ENGINE_GRAPHICS_API void DrawIndexedInstanced
+        (
+            const GraphicsAPI::ePrimitiveType primitiveType,
+            const unsigned long long indiceCount,
+            const unsigned int instanceCount,
+            const unsigned int startInstanceLocation
+        )
+        {
+            assert((unsigned int)primitiveType < GraphicsAPI::ePrimitiveType::END);
+
+            if (instanceCount == 0)
+            {
+                return;
+            }
+
+            dx11::SetPrimitiveTopology(primitiveType);
+            dx11::g_pImmediateContext->DrawIndexedInstanced(
+                static_cast<UINT>(indiceCount), instanceCount, 0, 0, startInstanceLocation);
+
+            // One call however many instances it carried, which is the whole
+            // point of it and what the draw call counter should reflect.
             dx11::DrawCallCounter++;
         }
 

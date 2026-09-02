@@ -6,6 +6,50 @@ namespace dooms
 	{
 		namespace graphicsSetting
 		{
+			// Draw everything sharing a mesh and a material in one call, with
+			// each copy reading its own model matrix from a per instance
+			// vertex stream.
+			//
+			// Measured ceiling before building it: 743 draws in the geometry
+			// pass share 51 distinct mesh and material pairs, a 14.6x collapse.
+			// Mesh binds were already down at 15.7, so what is left to win is
+			// the submission itself rather than the binding around it.
+			//
+			// **Not finished, and not safe to switch on.** The submission side
+			// is here and works -- the buffer of per instance matrices, the
+			// runs, the instanced draw -- but the gbuffer vertex shader still
+			// reads its model matrix from a uniform block, so a run drawn
+			// through this path would put every object at the same transform.
+			//
+			// The shader half was written and reverted. Feeding the matrix
+			// through four vec4 vertex inputs round trips correctly: glslcc
+			// emits them at locations 5 to 8 as TEXCOORD3 to 6 of type float4,
+			// and D3D11 accepts the input layout built from that, per instance
+			// on its own slot. What is not solved is that the engine then
+			// crashed after asset loading, past the point where every input
+			// layout reported success, and finding that needs a debugger or
+			// the D3D11 debug layer rather than another guess.
+			//
+			// Off by default so the two can be measured against each other,
+			// which is the only reason to have a toggle rather than a rewrite.
+			extern inline bool IsInstancingEnabled{ false };
+
+			// How many draw calls the geometry pass actually issued, and how
+			// many objects those carried. Equal means nothing was instanced.
+			extern inline unsigned int CullStatInstancedDrawCallCount{ 0 };
+			extern inline unsigned int CullStatInstancedObjectCount{ 0 };
+
+			// The vertex inputs carrying per instance data are recognised by
+			// name, because that is the only thing the shader reflection
+			// carries that the shader author controls. Anything starting with
+			// this shares one buffer slot and steps once per instance.
+			constexpr const char* INSTANCE_SHADER_INPUT_NAME_PREFIX = "aInstance";
+
+			// The vertex buffer slot that per instance stream is bound at.
+			// Every other input takes the slot matching its location, so this
+			// has to sit above the highest location any mesh attribute uses.
+			constexpr unsigned int INSTANCE_VERTEX_BUFFER_SLOT = 12;
+
 			extern inline bool IsSortObjectFrontToBack{ true };
 			extern inline bool IsDrawDebuggersEnabled{ true };
 			extern inline bool IsDrawMaskedOcclusionCullingBinTriangleStageDebugger{ false };

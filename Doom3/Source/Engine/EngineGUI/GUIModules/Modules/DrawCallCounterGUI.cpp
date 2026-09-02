@@ -133,6 +133,14 @@ void dooms::ui::DrawCallCounterGUI::Render()
 			ImGui::Text("Triangles  : %.2f M  (ideal %.2f M)",
 				static_cast<double>(dooms::graphics::graphicsSetting::CullStatIndexCount) / 3000000.0,
 				static_cast<double>(dooms::graphics::graphicsSetting::CullStatIdealIndexCount) / 3000000.0);
+			// What the geometry pass actually issued, beside what it carried.
+			// Equal means nothing was instanced, so this reads as off even
+			// when the toggle says on but the pass fell back.
+			ImGui::Text("Instanced  : %u draws for %u objects%s",
+				dooms::graphics::graphicsSetting::CullStatInstancedDrawCallCount,
+				dooms::graphics::graphicsSetting::CullStatInstancedObjectCount,
+				dooms::graphics::graphicsSetting::IsInstancingEnabled ? "" : "  (off)");
+
 			ImGui::Text("Draw groups: %u for %u objects",
 				dooms::graphics::graphicsSetting::CullStatDrawGroupCount,
 				dooms::graphics::graphicsSetting::CullStatDrawnRendererCount);

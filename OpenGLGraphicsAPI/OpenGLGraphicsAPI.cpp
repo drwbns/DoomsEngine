@@ -1776,6 +1776,32 @@ namespace dooms
 			opengl::DrawCallCounter++;
 		}
 
+		DOOMS_ENGINE_GRAPHICS_API void DrawIndexedInstanced
+		(
+			const GraphicsAPI::ePrimitiveType primitiveType,
+			const unsigned long long indiceCount,
+			const unsigned int instanceCount,
+			const unsigned int startInstanceLocation
+		)
+		{
+			assert((unsigned int)primitiveType < GraphicsAPI::ePrimitiveType::END);
+
+			if (instanceCount == 0)
+			{
+				return;
+			}
+
+			glDrawElementsInstancedBaseInstance(
+				PrimitiveTypeJumpTable[(unsigned int)primitiveType],
+				static_cast<GLsizei>(indiceCount),
+				GL_UNSIGNED_INT,
+				0,
+				static_cast<GLsizei>(instanceCount),
+				startInstanceLocation);
+
+			opengl::DrawCallCounter++;
+		}
+
 		DOOMS_ENGINE_GRAPHICS_API unsigned long long CreateMaterial()
 		{
 			unsigned int materialObject = glCreateProgram();

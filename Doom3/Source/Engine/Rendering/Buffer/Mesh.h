@@ -191,6 +191,30 @@ namespace dooms
 		void Draw() const;
 
 		/// <summary>
+		/// One draw carrying instanceCount copies of this mesh.
+		///
+		/// The per instance model matrices come from a stream the caller has
+		/// already bound; startInstanceLocation says where in it this run
+		/// begins, so one buffer holding the whole frame can be drawn from in
+		/// pieces without rebinding it.
+		/// </summary>
+		void DrawInstanced(const unsigned int instanceCount, const unsigned int startInstanceLocation) const;
+
+		/// <summary>
+		/// The instanced draw for a run that shares a detail level as well as
+		/// a mesh and a material. Instancing and level of detail otherwise
+		/// fight: one draw carries one index buffer, so the level has to be
+		/// part of what defines a run rather than something chosen per object.
+		/// </summary>
+		void DrawInstancedWithLodBuffers(
+			const BufferID& vertexBuffer,
+			const unsigned int* const layoutOffsets,
+			const BufferID& indexBuffer,
+			const unsigned long long indexCount,
+			const unsigned int instanceCount,
+			const unsigned int startInstanceLocation) const;
+
+		/// <summary>
 		/// Forget which mesh is bound.
 		///
 		/// Call at the start of a draw loop. Anything outside this class that

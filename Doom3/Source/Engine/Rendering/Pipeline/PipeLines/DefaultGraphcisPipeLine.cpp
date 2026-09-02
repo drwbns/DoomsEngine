@@ -5,6 +5,7 @@
 #include <utility>
 #include <Rendering/Renderer/MeshRenderer.h>
 #include <Rendering/Buffer/Mesh.h>
+#include <Rendering/Lod/MeshLod.h>
 
 #include <Rendering/RenderingDebugger/RenderingDebuggerModules/Modules/OverDrawVisualization.h>
 
@@ -260,6 +261,236 @@ void dooms::graphics::DefaultGraphcisPipeLine::DrawRenderers(dooms::Camera* cons
 	ConditionalDrawRenderers(targetCamera, cameraIndex, nullptr);	
 }
 
+namespace dooms
+{
+	namespace graphics
+	{
+namespace
+{
+	// Deliberately not members of the pipeline class.
+	//
+	// DefaultGraphcisPipeLine is reflected and this build loads a prebuilt
+	// reflection database, so growing it moves every offset that database
+	// describes and the engine dies during startup. Confirmed by adding one
+	// unused member and watching it die. The draw loop above already keeps
+	// its scratch vectors this way.
+	unsigned long long gInstanceModelMatrixBuffer = 0;
+	unsigned long long gInstanceModelMatrixBufferCapacity = 0;
+	std::vector<math::Matrix4x4> gInstanceModelMatrices;
+}
+
+static bool DrawRenderersInstancedImpl(const std::vector<dooms::Renderer*>& sortedRenderers)
+{
+	// Off until the shader half lands. The gbuffer vertex shader still takes
+	// its model matrix from a uniform block, so drawing a run of objects
+	// through this would give every one of them the same transform. See
+	// graphicsSetting::IsInstancingEnabled for what remains.
+	if (graphicsSetting::IsInstancingEnabled == false)
+	{
+		return false;
+	}
+
+	if (GraphicsAPI::DrawIndexedInstanced == nullptr ||
+		GraphicsAPI::CreateBufferObject == nullptr ||
+		GraphicsAPI::UpdateDataToBuffer == nullptr ||
+		GraphicsAPI::BindVertexDataBuffer == nullptr)
+	{
+		return false;
+	}
+
+	// The depth only pass forces one fixed material over every object, and its
+	// shader still takes the model matrix from a uniform block. Instancing it
+	// would draw every object at whatever matrix happened to be in the buffer.
+	if (dooms::graphics::FixedMaterial::GetSingleton()->GetFixedMaterial() != nullptr)
+	{
+		return false;
+	}
+
+	if (sortedRenderers.empty() == true)
+	{
+		graphicsSetting::CullStatInstancedDrawCallCount = 0;
+		graphicsSetting::CullStatInstancedObjectCount = 0;
+		return true;
+	}
+
+	// Every matrix for the pass in draw order, so a run is a contiguous span
+	// of it and the buffer is written once rather than per run.
+	gInstanceModelMatrices.clear();
+	gInstanceModelMatrices.reserve(sortedRenderers.size());
+
+	// The detail level each object would have been drawn at, chosen exactly as
+	// the single object path chooses it. A run has to share this: one draw
+	// carries one index buffer, so a level cannot vary within it. Without this
+	// instancing would quietly draw everything at full detail and then look
+	// faster than the thing it is being compared against.
+	static std::vector<const graphics::MeshLodLevel*> instanceLodLevels;
+	static std::vector<const graphics::MeshLodChain*> instanceLodChains;
+	instanceLodLevels.clear();
+	instanceLodChains.clear();
+	instanceLodLevels.reserve(sortedRenderers.size());
+	instanceLodChains.reserve(sortedRenderers.size());
+
+	for (const Renderer* const renderer : sortedRenderers)
+	{
+		gInstanceModelMatrices.push_back(renderer->GetTransform()->GetModelMatrix());
+
+		const graphics::MeshLodLevel* lodLevel = nullptr;
+		const graphics::MeshLodChain* lodChain = nullptr;
+
+		const dooms::MeshRenderer* const meshRenderer = dooms::CastTo<const dooms::MeshRenderer*>(renderer);
+
+		if (graphicsSetting::IsMeshLodEnabled == true &&
+			IsValid(meshRenderer) == true &&
+			renderer->mCullingEntityBlockViewer.IsValid() == true)
+		{
+			const culling::EntityBlock* const entityBlock = renderer->mCullingEntityBlockViewer.GetTargetEntityBlock();
+			const UINT32 entityIndex = renderer->mCullingEntityBlockViewer.GetEntityIndexInBlock();
+
+			const FLOAT32 screenWidth =
+				entityBlock->mAABBMaxScreenSpacePointX[entityIndex] - entityBlock->mAABBMinScreenSpacePointX[entityIndex];
+			const FLOAT32 screenHeight =
+				entityBlock->mAABBMaxScreenSpacePointY[entityIndex] - entityBlock->mAABBMinScreenSpacePointY[entityIndex];
+
+			const FLOAT32 coveredPixelCount =
+				((screenWidth > 0.0f) ? screenWidth : 0.0f) * ((screenHeight > 0.0f) ? screenHeight : 0.0f);
+
+			lodLevel = graphics::SelectMeshLod(meshRenderer->GetMesh(), coveredPixelCount, &lodChain);
+		}
+
+		instanceLodLevels.push_back(lodLevel);
+		instanceLodChains.push_back(lodChain);
+	}
+
+	const unsigned long long drawnInstanceCount = static_cast<unsigned long long>(gInstanceModelMatrices.size());
+
+	// Grown rather than resized every frame, since the visible count moves a
+	// little each frame and reallocating for that would cost more than the
+	// slack does.
+	//
+	// Not a dynamic buffer: UpdateDataToBuffer writes through UpdateSubresource,
+	// which D3D11 does not allow on a dynamic resource at all. A default usage
+	// buffer is what that entry point supports.
+	if (gInstanceModelMatrixBuffer == 0 || gInstanceModelMatrixBufferCapacity < drawnInstanceCount)
+	{
+		if (gInstanceModelMatrixBuffer != 0 && GraphicsAPI::DestroyBuffer != nullptr)
+		{
+			GraphicsAPI::DestroyBuffer(gInstanceModelMatrixBuffer);
+			gInstanceModelMatrixBuffer = 0;
+		}
+
+		gInstanceModelMatrixBufferCapacity = drawnInstanceCount * 2;
+		gInstanceModelMatrixBuffer = GraphicsAPI::CreateBufferObject(
+			GraphicsAPI::eBufferTarget::ARRAY_BUFFER,
+			gInstanceModelMatrixBufferCapacity * sizeof(math::Matrix4x4),
+			nullptr,
+			false);
+
+		if (gInstanceModelMatrixBuffer == 0)
+		{
+			gInstanceModelMatrixBufferCapacity = 0;
+			return false;
+		}
+	}
+
+	// UpdateSubresource with no box writes the whole resource, so the source
+	// has to be as long as the buffer is rather than as long as the frame
+	// needs. The padding is never drawn -- no run reaches past the renderer
+	// count -- it only keeps the copy inside memory this owns.
+	gInstanceModelMatrices.resize(static_cast<size_t>(gInstanceModelMatrixBufferCapacity), math::Matrix4x4(1.0f));
+
+	GraphicsAPI::UpdateDataToBuffer(
+		gInstanceModelMatrixBuffer,
+		GraphicsAPI::eBufferTarget::ARRAY_BUFFER,
+		0,
+		gInstanceModelMatrixBufferCapacity * sizeof(math::Matrix4x4),
+		gInstanceModelMatrices.data());
+
+	GraphicsAPI::BindVertexDataBuffer(
+		gInstanceModelMatrixBuffer,
+		graphicsSetting::INSTANCE_VERTEX_BUFFER_SLOT,
+		sizeof(math::Matrix4x4),
+		0);
+
+	unsigned int instancedDrawCallCount = 0;
+
+	// A run is a maximal span sharing a mesh and a material, which is exactly
+	// what the sort produced and what one draw can carry.
+	size_t runStartIndex = 0;
+
+	while (runStartIndex < sortedRenderers.size())
+	{
+		const dooms::MeshRenderer* const runMeshRenderer =
+			dooms::CastTo<const dooms::MeshRenderer*>(sortedRenderers[runStartIndex]);
+
+		const graphics::Mesh* const runMesh = IsValid(runMeshRenderer) ? runMeshRenderer->GetMesh() : nullptr;
+		const graphics::Material* const runMaterial = sortedRenderers[runStartIndex]->GetMaterial();
+
+		size_t runEndIndex = runStartIndex + 1;
+
+		// Switched off, every object is its own run: the same draws, the same
+		// stream, one object each. That is the control the toggle exists to
+		// provide, and it isolates batching from everything else that changed
+		// to make batching possible.
+		if (graphicsSetting::IsInstancingEnabled == true)
+		{
+			while (runEndIndex < sortedRenderers.size())
+			{
+				const dooms::MeshRenderer* const meshRenderer =
+					dooms::CastTo<const dooms::MeshRenderer*>(sortedRenderers[runEndIndex]);
+
+				const graphics::Mesh* const mesh = IsValid(meshRenderer) ? meshRenderer->GetMesh() : nullptr;
+
+				if (mesh != runMesh ||
+					sortedRenderers[runEndIndex]->GetMaterial() != runMaterial ||
+					instanceLodLevels[runEndIndex] != instanceLodLevels[runStartIndex])
+				{
+					break;
+				}
+
+				runEndIndex++;
+			}
+		}
+
+		const unsigned int instanceCount = static_cast<unsigned int>(runEndIndex - runStartIndex);
+
+		if (IsValid(runMesh) == true)
+		{
+			// Bound from the first of the run; every instance in it shares
+			// mesh, material and detail level by construction.
+			sortedRenderers[runStartIndex]->BindMaterial();
+
+			const graphics::MeshLodLevel* const runLodLevel = instanceLodLevels[runStartIndex];
+			const graphics::MeshLodChain* const runLodChain = instanceLodChains[runStartIndex];
+
+			if (runLodLevel != nullptr && runLodChain != nullptr)
+			{
+				runMesh->DrawInstancedWithLodBuffers(
+					runLodChain->mSharedVertexBuffer,
+					runLodChain->mLayoutOffsets,
+					runLodLevel->mIndexBuffer,
+					runLodLevel->mIndexCount,
+					instanceCount,
+					static_cast<unsigned int>(runStartIndex));
+			}
+			else
+			{
+				runMesh->DrawInstanced(instanceCount, static_cast<unsigned int>(runStartIndex));
+			}
+
+			instancedDrawCallCount++;
+		}
+
+		runStartIndex = runEndIndex;
+	}
+
+	graphicsSetting::CullStatInstancedDrawCallCount = instancedDrawCallCount;
+	graphicsSetting::CullStatInstancedObjectCount = static_cast<unsigned int>(sortedRenderers.size());
+
+	return true;
+}
+	}
+}
+
 void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 (
 	dooms::Camera* const targetCamera,
@@ -330,9 +561,25 @@ void dooms::graphics::DefaultGraphcisPipeLine::ConditionalDrawRenderers
 				});
 		}
 
-		for (Renderer* const renderer : visibleRenderers)
+		// Always taken when the pass can support it, whether or not instancing
+		// is switched on, because the gbuffer shader reads its model matrix
+		// from the per instance stream either way. The toggle decides how many
+		// objects a draw carries, not whether that stream is bound: leaving it
+		// unbound would draw the whole scene at whatever was in the buffer.
+		//
+		// The fallback below is for the passes that swap in a fixed material
+		// whose shader still takes the matrix from a uniform block.
+		const bool bIsInstancedPathUsed = DrawRenderersInstancedImpl(visibleRenderers);
+
+		if (bIsInstancedPathUsed == false)
 		{
-			renderer->Draw();
+			for (Renderer* const renderer : visibleRenderers)
+			{
+				renderer->Draw();
+			}
+
+			graphicsSetting::CullStatInstancedDrawCallCount = static_cast<unsigned int>(visibleRenderers.size());
+			graphicsSetting::CullStatInstancedObjectCount = static_cast<unsigned int>(visibleRenderers.size());
 		}
 
 		// Only for the pass that shades, so a depth pre pass does not report

@@ -659,6 +659,59 @@ void dooms::graphics::Mesh::DrawWithLodBuffers(
 	GraphicsAPI::DrawIndexed(mPrimitiveType, indexCount);
 }
 
+void dooms::graphics::Mesh::DrawInstancedWithLodBuffers(
+	const BufferID& vertexBuffer,
+	const unsigned int* const layoutOffsets,
+	const BufferID& indexBuffer,
+	const unsigned long long indexCount,
+	const unsigned int instanceCount,
+	const unsigned int startInstanceLocation) const
+{
+	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
+
+	if (GraphicsAPI::DrawIndexedInstanced == nullptr)
+	{
+		return;
+	}
+
+	if (vertexBuffer.IsValid() == false || indexBuffer.IsValid() == false || indexCount == 0)
+	{
+		DrawInstanced(instanceCount, startInstanceLocation);
+		return;
+	}
+
+	// The same binding the single object path does, and for the same reason:
+	// every level of a mesh shares one vertex buffer, so a run at one level
+	// does not rebind it for a run at another.
+	if (BOUND_VERTEX_BUFFER_ID[0] != vertexBuffer.GetBufferID())
+	{
+		ResetBoundMeshCache();
+		MESH_BIND_COUNT++;
+
+		for (UINT32 bufferLayoutIndex = 0; bufferLayoutIndex < mVertexBufferLayoutCount; bufferLayoutIndex++)
+		{
+			BOUND_VERTEX_BUFFER_ID[bufferLayoutIndex] = vertexBuffer;
+
+			GraphicsAPI::BindVertexDataBuffer(
+				vertexBuffer,
+				bufferLayoutIndex,
+				mVertexBufferLayouts[bufferLayoutIndex].mStride,
+				layoutOffsets[bufferLayoutIndex]);
+		}
+	}
+
+	if (BOUND_INDEX_BUFFER_ID != indexBuffer.GetBufferID())
+	{
+		INDEX_BIND_COUNT++;
+		BOUND_INDEX_BUFFER_ID = indexBuffer;
+		GraphicsAPI::BindBuffer(indexBuffer, 0, GraphicsAPI::eBufferTarget::ELEMENT_ARRAY_BUFFER, GraphicsAPI::eGraphicsPipeLineStage::DUMMY);
+	}
+
+	INDEX_COUNT += indexCount * instanceCount;
+
+	GraphicsAPI::DrawIndexedInstanced(mPrimitiveType, indexCount, instanceCount, startInstanceLocation);
+}
+
 void dooms::graphics::Mesh::DrawWithIndexBuffer(const BufferID& indexBuffer, const unsigned long long indexCount) const
 {
 	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
@@ -707,6 +760,28 @@ void dooms::graphics::Mesh::Draw() const
 	{
 		GraphicsAPI::Draw(mPrimitiveType, 0, mNumOfVertices);
 	}
+}
+
+void dooms::graphics::Mesh::DrawInstanced(const unsigned int instanceCount, const unsigned int startInstanceLocation) const
+{
+	D_ASSERT(mPrimitiveType != GraphicsAPI::ePrimitiveType::NONE);
+
+	if (GraphicsAPI::DrawIndexedInstanced == nullptr || IsElementBufferGenerated() == false)
+	{
+		// No instanced entry point in this backend, or nothing indexed to
+		// instance. Drawing the run once would be wrong in a way that is hard
+		// to see, so it draws nothing and the caller's statistics show it.
+		return;
+	}
+
+	BindVertexBufferObjectIfNotBound();
+	BindIndexBufferObject();
+
+	// Every instance submits the same indices, so the triangle count is what
+	// the frame actually asked the hardware to transform.
+	INDEX_COUNT += mNumOfIndices * instanceCount;
+
+	GraphicsAPI::DrawIndexedInstanced(mPrimitiveType, mNumOfIndices, instanceCount, startInstanceLocation);
 }
 
 void dooms::graphics::Mesh::DrawArray(const INT32 startVertexLocation, const UINT32 vertexCount) const
