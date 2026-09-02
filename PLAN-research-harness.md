@@ -869,13 +869,31 @@ Ordered by what would change a decision, not by size.
    - `reflection_binary_Release_x64.cppbin` is not committed either, so there
      is nothing to fall back on.
 
-   Two ways out, and the choice is about repository size rather than
-   difficulty. Committing the built tools costs about 69 MB and matches how
-   assimp, oneTBB and glslcc are already vendored and copied by post build
-   steps. Scripting the CMake build costs nothing in the repository and adds a
-   build dependency on CMake and clang, plus the time to build a 35 MB scanner
-   that embeds clang. Nothing here can decide that; it is a call about the
-   repository.
+   **Decided: the tools are not going into the repository.** Sixty nine
+   megabytes of build output would sit in the history of every future clone
+   for ever, the submodule already ignores them on purpose (`f34389df`), and
+   the source that produces them is committed. Vendoring assimp and oneTBB is
+   not the same thing -- those are third party binaries with no source here;
+   these are outputs of code in this tree.
+
+   So the clean clone procedure is to build them once, and it is written down
+   rather than left as folklore:
+
+   1. Build the tools from `clReflect_ForDoomsEngine` with CMake. Their output
+      lands in `binary/bin/Release`.
+   2. Build Doom3. The post build step copies them into the output directory
+      and warns if step 1 was skipped.
+   3. Set `GENERATE_REFLECTION_DATA = TRUE` in config.ini for one run to
+      produce `reflection_binary_*.cppbin`, then set it back.
+
+   The alternative -- committing the 247 KB generated reflection binary
+   instead of the 69 MB toolchain -- was considered and rejected. It would
+   make a clean clone run without building anything, but a committed
+   reflection database goes stale the moment a reflected type changes, and a
+   stale one does not fail loudly: it moves every offset it describes and the
+   engine dies during startup with nothing to say. That failure cost most of a
+   session already. A missing file that prints a warning is a better failure
+   than a wrong file that crashes.
 
 7. **The `clexport -map` crash is fixed in source, and the shipped tools do
    not have the fix yet.**
